@@ -14,6 +14,12 @@ export interface NormalizedRegion {
   height: number;
 }
 
+export interface VideoQueueItem {
+  id: string;
+  asset: VideoAsset;
+  region: NormalizedRegion;
+}
+
 export type ProcessingPhase =
   | "idle"
   | "loading-engine"
@@ -27,4 +33,14 @@ export interface ProcessingState {
   progress: number;
   message: string;
   error?: string;
+}
+
+export type BatchProcessingPhase = ProcessingPhase | "queued";
+
+export interface BatchItemProcessingState {
+  phase: BatchProcessingPhase;
+  progress: number;
+  message: string;
+  error?: string;
+  result: Blob | null;
 }

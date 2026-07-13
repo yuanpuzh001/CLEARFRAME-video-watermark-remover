@@ -8,9 +8,10 @@ interface VideoPreviewProps {
   region: NormalizedRegion;
   onReset: () => void;
   onRegionChange: (region: NormalizedRegion) => void;
+  resetLabel?: string;
 }
 
-export function VideoPreview({ asset, region, onReset, onRegionChange }: VideoPreviewProps) {
+export function VideoPreview({ asset, region, onReset, onRegionChange, resetLabel = "更换视频" }: VideoPreviewProps) {
   return (
     <section className="workspace-card" aria-labelledby="source-heading">
       <div className="workspace-card__head">
@@ -20,7 +21,7 @@ export function VideoPreview({ asset, region, onReset, onRegionChange }: VideoPr
         </div>
         <button className="button button--ghost" type="button" onClick={onReset}>
           <RotateCcw size={16} />
-          更换视频
+          {resetLabel}
         </button>
       </div>
       <RegionEditor asset={asset} region={region} onChange={onRegionChange} />

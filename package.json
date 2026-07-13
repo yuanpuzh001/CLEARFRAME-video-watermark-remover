@@ -13,6 +13,7 @@
   "dependencies": {
     "@ffmpeg/ffmpeg": "0.12.15",
     "@ffmpeg/util": "0.12.2",
+    "fflate": "0.8.2",
     "lucide-react": "0.468.0",
     "react": "19.1.0",
     "react-dom": "19.1.0"

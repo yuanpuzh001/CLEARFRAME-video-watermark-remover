@@ -99,6 +99,7 @@ main { padding: 76px 0 58px; }
 .upload-zone__icon { width: 58px; height: 58px; display: grid; place-items: center; margin-bottom: 26px; color: var(--acid); border: 1px solid rgba(185,255,90,.5); border-radius: 50%; box-shadow: 0 0 40px rgba(185,255,90,.1); }
 .upload-zone h2 { margin: 0; font: 400 clamp(28px, 3vw, 44px)/1.2 "Songti SC", serif; letter-spacing: -.03em; }
 .upload-zone__copy { max-width: 520px; margin: 18px auto 26px; color: var(--muted); font-size: 14px; line-height: 1.8; }
+.upload-zone__hint { margin: 10px 0 0; color: var(--muted); font-size: 10px; letter-spacing: .08em; }
 .upload-zone__limits { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 24px; margin-top: 28px; color: var(--muted); font-size: 11px; }
 .upload-zone__limits span { display: flex; align-items: center; gap: 5px; }
 
@@ -114,6 +115,28 @@ main { padding: 76px 0 58px; }
 
 .workspace-card { padding: 26px; border: 1px solid var(--line); background: rgba(17,21,19,.86); box-shadow: 0 30px 90px rgba(0,0,0,.28); }
 .workspace-stack { display: grid; gap: 18px; }
+.batch-queue { padding: 22px; border: 1px solid var(--line); background: rgba(17,21,19,.76); }
+.batch-queue__head { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
+.batch-queue__head h2 { margin: 0; font: 400 24px/1.1 "Songti SC", serif; }
+.batch-queue__list { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; max-height: 286px; overflow: auto; scrollbar-color: var(--acid) rgba(255,255,255,.05); }
+.batch-item { position: relative; min-width: 0; border: 1px solid var(--line); background: rgba(255,255,255,.018); transition: border-color .2s ease, background .2s ease; }
+.batch-item.is-active { border-color: rgba(185,255,90,.58); background: rgba(185,255,90,.055); }
+.batch-item__select { width: 100%; min-height: 78px; display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 11px; align-items: center; padding: 13px 42px 13px 13px; border: 0; color: inherit; background: transparent; text-align: left; cursor: pointer; }
+.batch-item__select:hover { background: rgba(255,255,255,.025); }
+.batch-item__index { color: var(--muted); font: 700 9px/1 "DIN Alternate", monospace; letter-spacing: .12em; }
+.batch-item__select > svg { color: var(--acid); }
+.batch-item__copy { min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.batch-item__copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.batch-item__copy small { overflow: hidden; color: var(--muted); font: 500 9px/1 "DIN Alternate", monospace; white-space: nowrap; text-overflow: ellipsis; }
+.batch-item__state { color: var(--muted); font: 700 8px/1 "DIN Alternate", monospace; letter-spacing: .12em; }
+.batch-item.is-active .batch-item__state { color: var(--acid); }
+.batch-item--success .batch-item__state { color: var(--acid); }
+.batch-item--error .batch-item__state, .batch-item--cancelled .batch-item__state { color: var(--danger); }
+.batch-item--processing .batch-item__state, .batch-item--loading-engine .batch-item__state, .batch-item--queued .batch-item__state { color: #f3c969; }
+.batch-item__remove { position: absolute; z-index: 2; top: 8px; right: 8px; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 0; color: var(--muted); background: transparent; cursor: pointer; }
+.batch-item__remove:hover { color: var(--danger); background: rgba(255,114,95,.1); }
+.batch-item__remove:disabled { opacity: .25; cursor: not-allowed; }
+.batch-item__progress { position: absolute; inset: auto auto -1px -1px; height: 2px; max-width: calc(100% + 2px); background: var(--acid); box-shadow: 0 0 12px rgba(185,255,90,.6); transition: width .2s ease; }
 .workspace-card__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
 .workspace-card__head h2 { margin: 0; font: 400 28px/1.1 "Songti SC", serif; }
 .region-panel { display: grid; gap: 18px; }
@@ -154,6 +177,7 @@ main { padding: 76px 0 58px; }
 .process-panel__status > div:nth-child(2) { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 11px; }
 .process-panel__status strong { color: var(--paper); font-weight: 550; }
 .process-panel__error { display: flex; align-items: flex-start; gap: 7px; margin: 11px 0 0; color: #ff9b8f; font-size: 11px; line-height: 1.5; }
+.process-panel__actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .button--large { min-height: 54px; padding-inline: 28px; white-space: nowrap; }
 .button--danger { min-height: 54px; padding-inline: 24px; color: #ffd3ce; background: rgba(255,114,95,.12); border: 1px solid rgba(255,114,95,.4); white-space: nowrap; }
 
@@ -188,6 +212,9 @@ footer { min-height: 72px; display: flex; justify-content: space-between; align-
   .asset-strip { grid-template-columns: auto minmax(0, 1fr); }
   .asset-strip dl { grid-column: 1 / -1; gap: 22px; justify-content: space-between; }
   .workspace-card { padding: 16px; }
+  .batch-queue { padding: 16px; }
+  .batch-queue__head { align-items: flex-start; }
+  .batch-queue__list { grid-template-columns: 1fr; }
   .process-panel { grid-template-columns: 1fr; gap: 22px; padding: 20px; }
   .process-panel .button { width: 100%; }
   .result-panel { padding: 18px; }

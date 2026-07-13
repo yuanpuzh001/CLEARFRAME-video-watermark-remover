@@ -5,6 +5,21 @@ export const MAX_DURATION_SECONDS = 5 * 60;
 
 export class VideoValidationError extends Error {}
 
+export interface VideoFileFailure {
+  file: File;
+  message: string;
+}
+
+export interface VideoFileValidationBatch {
+  accepted: File[];
+  rejected: VideoFileFailure[];
+}
+
+export interface VideoAssetBatch {
+  assets: VideoAsset[];
+  failures: VideoFileFailure[];
+}
+
 export function validateVideoFile(file: File): void {
   const isMp4 = file.type === "video/mp4" || file.name.toLowerCase().endsWith(".mp4");
   if (!isMp4) {
@@ -13,6 +28,25 @@ export function validateVideoFile(file: File): void {
   if (file.size > MAX_FILE_BYTES) {
     throw new VideoValidationError("文件超过 200MB，请选择更小的视频。");
   }
+}
+
+export function validateVideoFiles(files: readonly File[]): VideoFileValidationBatch {
+  const accepted: File[] = [];
+  const rejected: VideoFileFailure[] = [];
+
+  for (const file of files) {
+    try {
+      validateVideoFile(file);
+      accepted.push(file);
+    } catch (reason) {
+      rejected.push({
+        file,
+        message: reason instanceof Error ? reason.message : "视频校验失败。",
+      });
+    }
+  }
+
+  return { accepted, rejected };
 }
 
 export function loadVideoAsset(file: File): Promise<VideoAsset> {
@@ -48,6 +82,25 @@ export function loadVideoAsset(file: File): Promise<VideoAsset> {
     };
     video.src = url;
   });
+}
+
+export async function loadVideoAssets(files: readonly File[]): Promise<VideoAssetBatch> {
+  const { accepted, rejected } = validateVideoFiles(files);
+  const assets: VideoAsset[] = [];
+  const failures = [...rejected];
+
+  for (const file of accepted) {
+    try {
+      assets.push(await loadVideoAsset(file));
+    } catch (reason) {
+      failures.push({
+        file,
+        message: reason instanceof Error ? reason.message : "视频读取失败。",
+      });
+    }
+  }
+
+  return { assets, failures };
 }
 
 export function formatBytes(bytes: number): string {

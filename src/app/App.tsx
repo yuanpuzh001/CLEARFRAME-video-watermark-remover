@@ -1,38 +1,92 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, LockKeyhole, Sparkles } from "lucide-react";
+import { BatchQueue } from "../components/BatchQueue";
 import { UploadZone } from "../components/UploadZone";
 import { VideoPreview } from "../components/VideoPreview";
 import { ProcessPanel } from "../components/ProcessPanel";
 import { ResultPanel } from "../components/ResultPanel";
-import { useVideoProcessor } from "../hooks/useVideoProcessor";
+import { useBatchVideoProcessor } from "../hooks/useBatchVideoProcessor";
 import { DEFAULT_REGION } from "../lib/video/region";
-import { loadVideoAsset } from "../lib/video/validation";
-import type { NormalizedRegion, VideoAsset } from "../types/video";
+import { createResultArchive, downloadBlob } from "../lib/video/resultArchive";
+import { cleanOutputName, loadVideoAssets } from "../lib/video/validation";
+import type { NormalizedRegion, ProcessingState, VideoQueueItem } from "../types/video";
 
 export function App() {
-  const [asset, setAsset] = useState<VideoAsset | null>(null);
+  const [items, setItems] = useState<VideoQueueItem[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [region, setRegion] = useState<NormalizedRegion>(DEFAULT_REGION);
-  const processor = useVideoProcessor();
+  const [downloadingAll, setDownloadingAll] = useState(false);
+  const itemsRef = useRef<VideoQueueItem[]>([]);
+  const processor = useBatchVideoProcessor();
+  const activeItem = items.find((item) => item.id === activeId) ?? items[0] ?? null;
+  const activeState = activeItem ? processor.states[activeItem.id] : undefined;
+  const completed = items.filter((item) => processor.states[item.id]?.phase === "success").length;
+  const failed = items.filter((item) => processor.states[item.id]?.phase === "error").length;
+  const cancelled = items.filter((item) => processor.states[item.id]?.phase === "cancelled").length;
+  const remaining = items.length - completed;
+  const runningItem = items.find((item) => {
+    const phase = processor.states[item.id]?.phase;
+    return phase === "loading-engine" || phase === "processing";
+  });
+  const totalProgress = items.length === 0 ? 0 : items.reduce((sum, item) => {
+    const state = processor.states[item.id];
+    return sum + (state?.phase === "success" ? 1 : state?.progress ?? 0);
+  }, 0) / items.length;
+  const processState: ProcessingState = (() => {
+    if (processor.isRunning) {
+      const runningState = runningItem ? processor.states[runningItem.id] : undefined;
+      const position = runningItem ? items.findIndex(({ id }) => id === runningItem.id) + 1 : completed + 1;
+      return {
+        phase: runningState?.phase === "processing" ? "processing" : "loading-engine",
+        progress: totalProgress,
+        message: runningItem
+          ? `正在处理 ${runningItem.asset.file.name} · ${position}/${items.length}`
+          : "队列准备中…",
+      };
+    }
+    if (items.length > 0 && completed === items.length) {
+      return { phase: "success", progress: 1, message: `全部 ${items.length} 个视频处理完成` };
+    }
+    if (failed > 0) {
+      return {
+        phase: "error",
+        progress: totalProgress,
+        message: `已完成 ${completed}/${items.length}`,
+        error: `${failed} 个视频处理失败，可保留成功结果并重试失败项。`,
+      };
+    }
+    if (cancelled > 0) {
+      return { phase: "cancelled", progress: totalProgress, message: `批量处理已取消 · 已完成 ${completed}/${items.length}` };
+    }
+    return { phase: "idle", progress: totalProgress, message: `${items.length} 个视频等待处理` };
+  })();
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => () => {
-    if (asset) URL.revokeObjectURL(asset.url);
-  }, [asset]);
+    for (const item of itemsRef.current) URL.revokeObjectURL(item.asset.url);
+  }, []);
 
-  const handleSelect = async (file: File) => {
+  const handleSelect = async (files: File[]) => {
     setError("");
     setLoading(true);
     try {
-      const nextAsset = await loadVideoAsset(file);
-      setRegion(DEFAULT_REGION);
-      processor.clearResult();
-      setAsset((current) => {
-        if (current) URL.revokeObjectURL(current.url);
-        return nextAsset;
-      });
+      const { assets, failures } = await loadVideoAssets(files);
+      const nextItems = assets.map((asset) => ({
+        id: crypto.randomUUID(),
+        asset,
+        region: DEFAULT_REGION,
+      }));
+      setItems((current) => [...current, ...nextItems]);
+      setActiveId((current) => current ?? nextItems[0]?.id ?? null);
+      if (failures.length > 0) {
+        setError(failures.map(({ file, message }) => `${file.name}：${message}`).join("；"));
+      }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "视频读取失败，请重试。");
+      setError(reason instanceof Error ? reason.message : "批量视频读取失败，请重试。");
     } finally {
       setLoading(false);
     }
@@ -41,16 +95,55 @@ export function App() {
   const handleReset = () => {
     setError("");
     processor.cancel();
-    processor.clearResult();
-    setAsset((current) => {
-      if (current) URL.revokeObjectURL(current.url);
-      return null;
-    });
+    processor.resetAll();
+    for (const item of items) URL.revokeObjectURL(item.asset.url);
+    setItems([]);
+    setActiveId(null);
+  };
+
+  const handleRemove = (id: string) => {
+    if (processor.isRunning) return;
+    const removed = items.find((item) => item.id === id);
+    if (removed) URL.revokeObjectURL(removed.asset.url);
+    const remaining = items.filter((item) => item.id !== id);
+    setItems(remaining);
+    if (activeId === id) {
+      setActiveId(remaining[0]?.id ?? null);
+    }
+    processor.removeItem(id);
+  };
+
+  const handleActiveChange = (id: string) => {
+    if (id === activeId) return;
+    setActiveId(id);
   };
 
   const handleRegionChange = (nextRegion: NormalizedRegion) => {
-    setRegion(nextRegion);
-    if (processor.result) processor.clearResult();
+    if (!activeItem) return;
+    setItems((current) => current.map((item) => (
+      item.id === activeItem.id ? { ...item, region: nextRegion } : item
+    )));
+    processor.resetItem(activeItem.id);
+  };
+
+  const handleDownloadAll = async () => {
+    if (downloadingAll) return;
+    const results = items.flatMap((item) => {
+      const result = processor.states[item.id]?.result;
+      return result ? [{ name: cleanOutputName(item.asset.file.name), blob: result }] : [];
+    });
+    if (results.length === 0) return;
+
+    setError("");
+    setDownloadingAll(true);
+    try {
+      const archive = await createResultArchive(results);
+      downloadBlob(archive, `clearframe-${results.length}-videos.zip`);
+    } catch (reason) {
+      setError(reason instanceof Error ? `打包下载失败：${reason.message}` : "打包下载失败，请重试。");
+    } finally {
+      setDownloadingAll(false);
+    }
   };
 
   return (
@@ -79,27 +172,42 @@ export function App() {
         </section>
 
         {error && <div className="notice notice--error" role="alert">{error}</div>}
-        {loading && <div className="notice" role="status">正在读取视频信息…</div>}
+        {loading && <div className="notice" role="status">正在读取批量视频信息…</div>}
 
-        {asset ? (
+        {activeItem ? (
           <div className="workspace-stack">
+            <BatchQueue
+              items={items}
+              states={processor.states}
+              activeId={activeItem.id}
+              disabled={loading || processor.isRunning}
+              onAdd={handleSelect}
+              onRemove={handleRemove}
+              onSelect={handleActiveChange}
+            />
             <VideoPreview
-              asset={asset}
-              region={region}
+              asset={activeItem.asset}
+              region={activeItem.region}
               onReset={handleReset}
               onRegionChange={handleRegionChange}
+              resetLabel="清空队列"
             />
             <ProcessPanel
-              state={processor.state}
-              onProcess={() => void processor.run(asset, region)}
+              state={processState}
+              total={items.length}
+              completed={completed}
+              remaining={remaining}
+              downloadingAll={downloadingAll}
+              onProcess={() => void processor.run(items)}
               onCancel={processor.cancel}
+              onDownloadAll={() => void handleDownloadAll()}
             />
-            {processor.result && (
+            {activeState?.result && (
               <ResultPanel
-                asset={asset}
-                result={processor.result}
+                asset={activeItem.asset}
+                result={activeState.result}
                 onReprocess={() => {
-                  processor.clearResult();
+                  processor.resetItem(activeItem.id);
                   document.getElementById("region-heading")?.scrollIntoView({ behavior: "smooth" });
                 }}
               />
