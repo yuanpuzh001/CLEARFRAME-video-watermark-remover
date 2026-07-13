@@ -13,6 +13,7 @@ describe("UploadZone", () => {
     ];
 
     expect(input?.multiple).toBe(true);
+    expect(container.querySelector(".upload-zone")).toHaveAttribute("id", "input-queue");
     expect(screen.getByRole("button", { name: "选择 MP4 视频" })).toBeInTheDocument();
     expect(screen.getByText("可以选择多个文件")).toBeInTheDocument();
     fireEvent.change(input!, { target: { files } });

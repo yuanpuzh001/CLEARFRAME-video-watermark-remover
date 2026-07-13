@@ -1,5 +1,6 @@
 import { Check, Download, RefreshCcw } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject, type SyntheticEvent } from "react";
+import { WORKFLOW_LABELS } from "../lib/ui/workflowLabels";
 import { syncMediaPause, syncMediaPlay, syncMediaRate, syncMediaTime } from "../lib/video/mediaSync";
 import { cleanOutputName, formatBytes } from "../lib/video/validation";
 import type { VideoAsset } from "../types/video";
@@ -7,10 +8,11 @@ import type { VideoAsset } from "../types/video";
 interface ResultPanelProps {
   asset: VideoAsset;
   result: Blob;
+  autoScroll?: boolean;
   onReprocess: () => void;
 }
 
-export function ResultPanel({ asset, result, onReprocess }: ResultPanelProps) {
+export function ResultPanel({ asset, result, autoScroll = true, onReprocess }: ResultPanelProps) {
   const [resultUrl, setResultUrl] = useState("");
   const sectionRef = useRef<HTMLElement>(null);
   const beforeVideoRef = useRef<HTMLVideoElement>(null);
@@ -29,11 +31,13 @@ export function ResultPanel({ asset, result, onReprocess }: ResultPanelProps) {
   useEffect(() => {
     const nextResultUrl = URL.createObjectURL(result);
     setResultUrl(nextResultUrl);
-    const frame = requestAnimationFrame(() => {
-      sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    const frame = autoScroll
+      ? requestAnimationFrame(() => {
+          sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        })
+      : null;
     return () => {
-      cancelAnimationFrame(frame);
+      if (frame !== null) cancelAnimationFrame(frame);
       URL.revokeObjectURL(nextResultUrl);
     };
   }, [result]);
@@ -42,8 +46,8 @@ export function ResultPanel({ asset, result, onReprocess }: ResultPanelProps) {
     <section ref={sectionRef} className="result-panel" aria-labelledby="result-heading">
       <div className="result-panel__head">
         <div>
-          <p className="eyebrow">OUTPUT / 04</p>
-          <h2 id="result-heading"><Check size={22} /> 修复结果已就绪</h2>
+          <p className="eyebrow">{WORKFLOW_LABELS.outputVideo}</p>
+          <h2 id="result-heading"><Check size={22} /> 修复结果</h2>
           <p>播放或拖动任一画面，两侧会同步到同一时间点，便于检查修复效果。</p>
         </div>
         <div className="result-panel__actions">

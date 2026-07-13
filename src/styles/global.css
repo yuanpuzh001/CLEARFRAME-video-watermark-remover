@@ -16,7 +16,7 @@
 
 * { box-sizing: border-box; }
 
-html { min-width: 320px; background: var(--ink); }
+html { min-width: 320px; scroll-behavior: smooth; background: var(--ink); }
 
 body {
   margin: 0;
@@ -73,9 +73,14 @@ main { padding: 76px 0 58px; }
 .intro h1 { margin: 0; max-width: 800px; font: 400 clamp(42px, 5vw, 78px)/1.04 "Songti SC", "Bodoni 72", serif; letter-spacing: -.055em; }
 .intro h1 em { color: var(--muted); font-style: italic; }
 .intro__meta { display: grid; grid-template-columns: repeat(4, 1fr); padding-bottom: 8px; border-bottom: 1px solid var(--line); }
-.intro__meta span { padding: 0 10px 12px; color: var(--muted); font-size: 11px; letter-spacing: .08em; border-right: 1px solid var(--line); }
-.intro__meta span:first-child { padding-left: 0; color: var(--paper); }
-.intro__meta span:last-child { border: 0; }
+.intro__meta a { position: relative; padding: 0 10px 12px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-decoration: none; border-right: 1px solid var(--line); transition: color .2s ease, background .2s ease; }
+.intro__meta a span { margin-right: 5px; color: var(--paper); }
+.intro__meta a:first-child { padding-left: 0; }
+.intro__meta a:last-child { border: 0; }
+.intro__meta a::after { content: ""; position: absolute; right: 10px; bottom: -1px; left: 10px; height: 1px; background: var(--acid); transform: scaleX(0); transform-origin: left; transition: transform .2s ease; }
+.intro__meta a:first-child::after { left: 0; }
+.intro__meta a:hover, .intro__meta a:focus-visible { color: var(--paper); background: rgba(185,255,90,.025); }
+.intro__meta a:hover::after, .intro__meta a:focus-visible::after { transform: scaleX(1); }
 
 .upload-zone {
   position: relative;
@@ -115,6 +120,8 @@ main { padding: 76px 0 58px; }
 
 .workspace-card { padding: 26px; border: 1px solid var(--line); background: rgba(17,21,19,.86); box-shadow: 0 30px 90px rgba(0,0,0,.28); }
 .workspace-stack { display: grid; gap: 18px; }
+.batch-queue, .process-panel, .workspace-card, .workflow-output-slot { scroll-margin-top: 24px; }
+.workflow-output-slot:empty { height: 0; margin-top: -18px; }
 .batch-queue { padding: 22px; border: 1px solid var(--line); background: rgba(17,21,19,.76); }
 .batch-queue__head { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
 .batch-queue__head h2 { margin: 0; font: 400 24px/1.1 "Songti SC", serif; }
@@ -137,11 +144,9 @@ main { padding: 76px 0 58px; }
 .batch-item__remove:hover { color: var(--danger); background: rgba(255,114,95,.1); }
 .batch-item__remove:disabled { opacity: .25; cursor: not-allowed; }
 .batch-item__progress { position: absolute; inset: auto auto -1px -1px; height: 2px; max-width: calc(100% + 2px); background: var(--acid); box-shadow: 0 0 12px rgba(185,255,90,.6); transition: width .2s ease; }
-.workspace-card__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
-.workspace-card__head h2 { margin: 0; font: 400 28px/1.1 "Songti SC", serif; }
 .region-panel { display: grid; gap: 18px; }
 .region-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.region-panel__head h2 { margin: 0; font: 400 22px/1.1 "Songti SC", serif; }
+.region-panel__head h2 { margin: 0; font: 400 28px/1.1 "Songti SC", serif; }
 .region-panel__actions { display: flex; gap: 8px; }
 .button--active { color: var(--ink); background: var(--acid); }
 .region-stage { position: relative; overflow: hidden; width: 100%; margin: 0 auto; background: #030504; user-select: none; }
@@ -169,13 +174,16 @@ main { padding: 76px 0 58px; }
 .asset-strip dl div { display: flex; flex-direction: column; gap: 5px; }
 .asset-strip dd { margin: 0; font: 600 12px/1 "DIN Alternate", monospace; }
 
-.process-panel { display: grid; grid-template-columns: minmax(260px, .9fr) minmax(260px, 1.2fr) auto; align-items: center; gap: 36px; padding: 26px; border: 1px solid var(--line); background: var(--panel); }
+.process-panel { display: grid; grid-template-columns: minmax(260px, 1fr) auto; align-items: end; gap: 24px 36px; padding: 26px; border: 1px solid var(--line); background: var(--panel); }
+.process-panel__status { grid-column: 1 / -1; }
+.process-panel__status-line { display: grid; grid-template-columns: minmax(150px, .45fr) minmax(0, 1fr); align-items: center; gap: 36px; margin-bottom: 11px; }
+.process-panel__status-line .eyebrow { margin: 0; }
+.process-panel__status-line > div { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 11px; }
+.process-panel__status-line strong { overflow: hidden; color: var(--paper); font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .process-panel__copy h2 { margin: 0 0 8px; font: 400 26px/1.1 "Songti SC", serif; }
 .process-panel__copy > p:last-child { max-width: 460px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
-.process-panel__meter { overflow: hidden; height: 4px; margin-bottom: 10px; background: rgba(255,255,255,.09); }
+.process-panel__meter { overflow: hidden; height: 5px; background: rgba(255,255,255,.09); }
 .process-panel__meter span { display: block; height: 100%; background: var(--acid); box-shadow: 0 0 16px rgba(185,255,90,.6); transition: width .25s ease; }
-.process-panel__status > div:nth-child(2) { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 11px; }
-.process-panel__status strong { color: var(--paper); font-weight: 550; }
 .process-panel__error { display: flex; align-items: flex-start; gap: 7px; margin: 11px 0 0; color: #ff9b8f; font-size: 11px; line-height: 1.5; }
 .process-panel__actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .button--large { min-height: 54px; padding-inline: 28px; white-space: nowrap; }
@@ -202,6 +210,10 @@ main { padding: 76px 0 58px; }
 
 footer { min-height: 72px; display: flex; justify-content: space-between; align-items: center; gap: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
 
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
 @media (max-width: 820px) {
   .app-shell { padding: 0 20px; }
   .topbar__status { display: none; }
@@ -216,6 +228,7 @@ footer { min-height: 72px; display: flex; justify-content: space-between; align-
   .batch-queue__head { align-items: flex-start; }
   .batch-queue__list { grid-template-columns: 1fr; }
   .process-panel { grid-template-columns: 1fr; gap: 22px; padding: 20px; }
+  .process-panel__status-line { grid-template-columns: 1fr; gap: 8px; }
   .process-panel .button { width: 100%; }
   .result-panel { padding: 18px; }
   .result-panel__head { align-items: flex-start; flex-direction: column; }

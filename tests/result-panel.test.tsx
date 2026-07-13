@@ -37,6 +37,8 @@ describe("ResultPanel download URL", () => {
       </StrictMode>,
     );
 
+    expect(screen.getByText("OUTPUT VIDEO / 04")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "修复结果" })).toBeInTheDocument();
     const download = await screen.findByRole("link", { name: "下载视频" });
     await waitFor(() => expect(download).toHaveAttribute("href", "blob:active-result"));
     expect(createObjectURL).toHaveBeenCalledTimes(2);
@@ -45,5 +47,34 @@ describe("ResultPanel download URL", () => {
 
     unmount();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:active-result");
+  });
+
+  it("keeps the batch progress area in view when a result becomes available", async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:batch-result") });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    render(
+      <ResultPanel
+        asset={{
+          file: new File(["video"], "batch.mp4", { type: "video/mp4" }),
+          url: "blob:source",
+          width: 1920,
+          height: 1080,
+          duration: 6,
+          size: 5,
+        }}
+        result={new Blob(["result"], { type: "video/mp4" })}
+        autoScroll={false}
+        onReprocess={vi.fn()}
+      />,
+    );
+
+    await screen.findByRole("link", { name: "下载视频" });
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });

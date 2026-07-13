@@ -1,5 +1,6 @@
 import { FilePlus2, Film, Trash2 } from "lucide-react";
 import { useRef, type ChangeEvent } from "react";
+import { WORKFLOW_LABELS, WORKFLOW_SECTIONS } from "../lib/ui/workflowLabels";
 import { formatBytes, formatDuration } from "../lib/video/validation";
 import type { BatchItemProcessingState, VideoQueueItem } from "../types/video";
 
@@ -31,10 +32,10 @@ export function BatchQueue({
   };
 
   return (
-    <section className="batch-queue" aria-labelledby="batch-heading">
+    <section id={WORKFLOW_SECTIONS.inputQueue.id} className="batch-queue" aria-labelledby="batch-heading">
       <div className="batch-queue__head">
         <div>
-          <p className="eyebrow">BATCH INPUT / {String(items.length).padStart(2, "0")}</p>
+          <p className="eyebrow">{WORKFLOW_LABELS.inputQueue}</p>
           <h2 id="batch-heading">处理队列</h2>
         </div>
         <button

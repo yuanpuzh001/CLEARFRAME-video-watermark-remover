@@ -1,5 +1,6 @@
 import { Crosshair, Move, RotateCcw } from "lucide-react";
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { WORKFLOW_LABELS } from "../lib/ui/workflowLabels";
 import { clampRegion, DEFAULT_REGION, regionToPixels } from "../lib/video/region";
 import type { NormalizedRegion, VideoAsset } from "../types/video";
 
@@ -65,11 +66,11 @@ export function RegionEditor({ asset, region, onChange }: RegionEditorProps) {
   };
 
   return (
-    <section className="region-panel" aria-labelledby="region-heading">
+    <div className="region-panel">
       <div className="region-panel__head">
         <div>
-          <p className="eyebrow">MASK / 02</p>
-          <h2 id="region-heading">确认水印区域</h2>
+          <p className="eyebrow">{WORKFLOW_LABELS.watermarkSelection}</p>
+          <h2 id="region-heading">选择水印区域</h2>
         </div>
         <div className="region-panel__actions">
           <button className="button button--ghost" type="button" onClick={() => onChange(DEFAULT_REGION)}>
@@ -133,6 +134,6 @@ export function RegionEditor({ asset, region, onChange }: RegionEditorProps) {
         <div><span>高度</span><strong>{pixels.height}px</strong></div>
         <p>{editing ? "拖动选框调整位置，右下角控制点调整大小。" : "默认区域已按样例定位，可直接进入修复。"}</p>
       </div>
-    </section>
+    </div>
   );
 }

@@ -1,5 +1,6 @@
 import { FileUp, Film, ShieldCheck } from "lucide-react";
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { WORKFLOW_SECTIONS } from "../lib/ui/workflowLabels";
 
 interface UploadZoneProps {
   disabled?: boolean;
@@ -28,6 +29,7 @@ export function UploadZone({ disabled = false, onSelect }: UploadZoneProps) {
 
   return (
     <div
+      id={WORKFLOW_SECTIONS.inputQueue.id}
       className={`upload-zone ${dragging ? "is-dragging" : ""}`}
       onDragEnter={() => setDragging(true)}
       onDragLeave={() => setDragging(false)}
@@ -39,7 +41,7 @@ export function UploadZone({ disabled = false, onSelect }: UploadZoneProps) {
         <FileUp size={28} strokeWidth={1.6} />
       </div>
       <p className="eyebrow">LOCAL INPUT / 01</p>
-      <h2>把视频交给浏览器，<br />不必交给服务器。</h2>
+      <h2>一切数据和处理都基于您本地，<br />无任何泄漏风险</h2>
       <p className="upload-zone__copy">拖放 MP4 到这里，或从电脑中选择。文件只停留在当前设备，并按队列顺序处理。</p>
       <button
         className="button button--primary"

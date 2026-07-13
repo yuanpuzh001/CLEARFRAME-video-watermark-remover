@@ -5,7 +5,9 @@ import { UploadZone } from "../components/UploadZone";
 import { VideoPreview } from "../components/VideoPreview";
 import { ProcessPanel } from "../components/ProcessPanel";
 import { ResultPanel } from "../components/ResultPanel";
+import { WorkflowNavigation } from "../components/WorkflowNavigation";
 import { useBatchVideoProcessor } from "../hooks/useBatchVideoProcessor";
+import { WORKFLOW_SECTIONS } from "../lib/ui/workflowLabels";
 import { DEFAULT_REGION } from "../lib/video/region";
 import { createResultArchive, downloadBlob } from "../lib/video/resultArchive";
 import { cleanOutputName, loadVideoAssets } from "../lib/video/validation";
@@ -164,11 +166,9 @@ export function App() {
         <section className="intro">
           <div>
             <p className="eyebrow">VIDEO RESTORATION CONSOLE</p>
-            <h1>擦去角落的标记，<br /><em>留下完整的画面。</em></h1>
+            <h1>免费去除视频水印，<br /><em>基于AI实现精准修改</em></h1>
           </div>
-          <div className="intro__meta">
-            <span>01 上传</span><span>02 定位</span><span>03 修复</span><span>04 导出</span>
-          </div>
+          <WorkflowNavigation itemCount={items.length} />
         </section>
 
         {error && <div className="notice notice--error" role="alert">{error}</div>}
@@ -185,13 +185,6 @@ export function App() {
               onRemove={handleRemove}
               onSelect={handleActiveChange}
             />
-            <VideoPreview
-              asset={activeItem.asset}
-              region={activeItem.region}
-              onReset={handleReset}
-              onRegionChange={handleRegionChange}
-              resetLabel="清空队列"
-            />
             <ProcessPanel
               state={processState}
               total={items.length}
@@ -200,18 +193,27 @@ export function App() {
               downloadingAll={downloadingAll}
               onProcess={() => void processor.run(items)}
               onCancel={processor.cancel}
+              onClearQueue={handleReset}
               onDownloadAll={() => void handleDownloadAll()}
             />
-            {activeState?.result && (
-              <ResultPanel
-                asset={activeItem.asset}
-                result={activeState.result}
-                onReprocess={() => {
-                  processor.resetItem(activeItem.id);
-                  document.getElementById("region-heading")?.scrollIntoView({ behavior: "smooth" });
-                }}
-              />
-            )}
+            <VideoPreview
+              asset={activeItem.asset}
+              region={activeItem.region}
+              onRegionChange={handleRegionChange}
+            />
+            <div id={WORKFLOW_SECTIONS.outputVideo.id} className="workflow-output-slot">
+              {activeState?.result && (
+                <ResultPanel
+                  asset={activeItem.asset}
+                  result={activeState.result}
+                  autoScroll={items.length === 1}
+                  onReprocess={() => {
+                    processor.resetItem(activeItem.id);
+                    document.getElementById("region-heading")?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                />
+              )}
+            </div>
           </div>
         ) : (
           <UploadZone disabled={loading} onSelect={handleSelect} />

@@ -1,4 +1,5 @@
-import { FileVideo2, RotateCcw } from "lucide-react";
+import { FileVideo2 } from "lucide-react";
+import { WORKFLOW_SECTIONS } from "../lib/ui/workflowLabels";
 import type { NormalizedRegion, VideoAsset } from "../types/video";
 import { formatBytes, formatDuration } from "../lib/video/validation";
 import { RegionEditor } from "./RegionEditor";
@@ -6,24 +7,12 @@ import { RegionEditor } from "./RegionEditor";
 interface VideoPreviewProps {
   asset: VideoAsset;
   region: NormalizedRegion;
-  onReset: () => void;
   onRegionChange: (region: NormalizedRegion) => void;
-  resetLabel?: string;
 }
 
-export function VideoPreview({ asset, region, onReset, onRegionChange, resetLabel = "更换视频" }: VideoPreviewProps) {
+export function VideoPreview({ asset, region, onRegionChange }: VideoPreviewProps) {
   return (
-    <section className="workspace-card" aria-labelledby="source-heading">
-      <div className="workspace-card__head">
-        <div>
-          <p className="eyebrow">SOURCE / 01</p>
-          <h2 id="source-heading">原片预览</h2>
-        </div>
-        <button className="button button--ghost" type="button" onClick={onReset}>
-          <RotateCcw size={16} />
-          {resetLabel}
-        </button>
-      </div>
+    <section id={WORKFLOW_SECTIONS.watermarkSelection.id} className="workspace-card" aria-labelledby="region-heading">
       <RegionEditor asset={asset} region={region} onChange={onRegionChange} />
       <div className="asset-strip">
         <FileVideo2 size={19} />

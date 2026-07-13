@@ -33,6 +33,8 @@ describe("BatchQueue", () => {
       />,
     );
 
+    expect(screen.getByRole("region", { name: "处理队列" })).toHaveAttribute("id", "input-queue");
+    expect(screen.getByText("INPUT QUEUE / 01")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "编辑 two.mp4" }));
     fireEvent.click(screen.getByRole("button", { name: "移除 one.mp4" }));
     expect(onSelect).toHaveBeenCalledWith("two");
