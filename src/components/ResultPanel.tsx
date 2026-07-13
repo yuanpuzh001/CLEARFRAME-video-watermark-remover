@@ -1,5 +1,6 @@
 import { Check, Download, RefreshCcw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject, type SyntheticEvent } from "react";
+import { syncMediaPause, syncMediaPlay, syncMediaRate, syncMediaTime } from "../lib/video/mediaSync";
 import { cleanOutputName, formatBytes } from "../lib/video/validation";
 import type { VideoAsset } from "../types/video";
 
@@ -10,19 +11,32 @@ interface ResultPanelProps {
 }
 
 export function ResultPanel({ asset, result, onReprocess }: ResultPanelProps) {
-  const [resultUrl] = useState(() => URL.createObjectURL(result));
+  const [resultUrl, setResultUrl] = useState("");
   const sectionRef = useRef<HTMLElement>(null);
+  const beforeVideoRef = useRef<HTMLVideoElement>(null);
+  const afterVideoRef = useRef<HTMLVideoElement>(null);
   const outputName = cleanOutputName(asset.file.name);
 
+  const withPeer = (
+    event: SyntheticEvent<HTMLVideoElement>,
+    peerRef: RefObject<HTMLVideoElement | null>,
+    sync: (source: HTMLVideoElement, target: HTMLVideoElement) => void,
+  ) => {
+    const peer = peerRef.current;
+    if (peer) sync(event.currentTarget, peer);
+  };
+
   useEffect(() => {
+    const nextResultUrl = URL.createObjectURL(result);
+    setResultUrl(nextResultUrl);
     const frame = requestAnimationFrame(() => {
       sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
     return () => {
       cancelAnimationFrame(frame);
-      URL.revokeObjectURL(resultUrl);
+      URL.revokeObjectURL(nextResultUrl);
     };
-  }, [resultUrl]);
+  }, [result]);
 
   return (
     <section ref={sectionRef} className="result-panel" aria-labelledby="result-heading">
@@ -30,13 +44,18 @@ export function ResultPanel({ asset, result, onReprocess }: ResultPanelProps) {
         <div>
           <p className="eyebrow">OUTPUT / 04</p>
           <h2 id="result-heading"><Check size={22} /> 修复结果已就绪</h2>
-          <p>分别播放原片与结果，检查水印区域的纹理修复效果。</p>
+          <p>播放或拖动任一画面，两侧会同步到同一时间点，便于检查修复效果。</p>
         </div>
         <div className="result-panel__actions">
           <button className="button button--ghost" type="button" onClick={onReprocess}>
             <RefreshCcw size={16} /> 重新调整
           </button>
-          <a className="button button--primary button--large" href={resultUrl} download={outputName}>
+          <a
+            className="button button--primary button--large"
+            href={resultUrl || undefined}
+            download={outputName}
+            aria-disabled={!resultUrl}
+          >
             <Download size={18} /> 下载视频
           </a>
         </div>
@@ -45,11 +64,33 @@ export function ResultPanel({ asset, result, onReprocess }: ResultPanelProps) {
       <div className="compare-grid">
         <figure>
           <div className="compare-grid__label"><span>BEFORE</span> 原片</div>
-          <video src={asset.url} controls playsInline preload="metadata" />
+          <video
+            ref={beforeVideoRef}
+            src={asset.url}
+            controls
+            playsInline
+            preload="metadata"
+            onPlay={(event) => withPeer(event, afterVideoRef, syncMediaPlay)}
+            onPause={(event) => withPeer(event, afterVideoRef, (_, peer) => syncMediaPause(peer))}
+            onSeeking={(event) => withPeer(event, afterVideoRef, syncMediaTime)}
+            onTimeUpdate={(event) => withPeer(event, afterVideoRef, syncMediaTime)}
+            onRateChange={(event) => withPeer(event, afterVideoRef, syncMediaRate)}
+          />
         </figure>
         <figure>
           <div className="compare-grid__label compare-grid__label--after"><span>AFTER</span> 已修复</div>
-          <video src={resultUrl} controls playsInline preload="metadata" />
+          <video
+            ref={afterVideoRef}
+            src={resultUrl || undefined}
+            controls
+            playsInline
+            preload="metadata"
+            onPlay={(event) => withPeer(event, beforeVideoRef, syncMediaPlay)}
+            onPause={(event) => withPeer(event, beforeVideoRef, (_, peer) => syncMediaPause(peer))}
+            onSeeking={(event) => withPeer(event, beforeVideoRef, syncMediaTime)}
+            onTimeUpdate={(event) => withPeer(event, beforeVideoRef, syncMediaTime)}
+            onRateChange={(event) => withPeer(event, beforeVideoRef, syncMediaRate)}
+          />
         </figure>
       </div>
 

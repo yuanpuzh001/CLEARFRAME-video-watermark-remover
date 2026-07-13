@@ -21,6 +21,7 @@ export function RegionEditor({ asset, region, onChange }: RegionEditorProps) {
   const interactionRef = useRef<Interaction | null>(null);
   const [editing, setEditing] = useState(false);
   const pixels = regionToPixels(region, asset.width, asset.height);
+  const stageMaxWidth = `${(72 * asset.width) / asset.height}vh`;
 
   const updateFromPointer = (event: PointerEvent<HTMLDivElement>) => {
     const interaction = interactionRef.current;
@@ -88,7 +89,10 @@ export function RegionEditor({ asset, region, onChange }: RegionEditorProps) {
       <div
         ref={stageRef}
         className={`region-stage ${editing ? "is-editing" : ""}`}
-        style={{ aspectRatio: `${asset.width} / ${asset.height}` }}
+        style={{
+          aspectRatio: `${asset.width} / ${asset.height}`,
+          maxWidth: stageMaxWidth,
+        }}
       >
         <video src={asset.url} controls={!editing} playsInline preload="metadata" />
         <div className="region-stage__shade" aria-hidden="true" />

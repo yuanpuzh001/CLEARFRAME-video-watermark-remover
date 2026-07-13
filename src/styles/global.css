@@ -121,7 +121,7 @@ main { padding: 76px 0 58px; }
 .region-panel__head h2 { margin: 0; font: 400 22px/1.1 "Songti SC", serif; }
 .region-panel__actions { display: flex; gap: 8px; }
 .button--active { color: var(--ink); background: var(--acid); }
-.region-stage { position: relative; overflow: hidden; width: 100%; max-height: 72vh; margin: 0 auto; background: #030504; user-select: none; }
+.region-stage { position: relative; overflow: hidden; width: 100%; margin: 0 auto; background: #030504; user-select: none; }
 .region-stage video { display: block; width: 100%; height: 100%; object-fit: contain; }
 .region-stage__shade { position: absolute; inset: 0; pointer-events: none; border: 1px solid rgba(255,255,255,.08); box-shadow: inset 0 0 120px rgba(0,0,0,.12); }
 .region-stage.is-editing video { pointer-events: none; opacity: .78; }
