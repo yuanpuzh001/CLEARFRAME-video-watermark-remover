@@ -6,7 +6,9 @@ import { VideoPreview } from "../components/VideoPreview";
 import { ProcessPanel } from "../components/ProcessPanel";
 import { ResultPanel } from "../components/ResultPanel";
 import { WorkflowNavigation } from "../components/WorkflowNavigation";
-import { useBatchVideoProcessor } from "../hooks/useBatchVideoProcessor";
+import type { SidecarConnectionState } from "../components/ProcessingModeControl";
+import { useBatchVideoProcessor, type ProcessingMode } from "../hooks/useBatchVideoProcessor";
+import { checkSidecar, type SidecarHealth } from "../lib/sidecar/client";
 import { WORKFLOW_SECTIONS } from "../lib/ui/workflowLabels";
 import { DEFAULT_REGION } from "../lib/video/region";
 import { createResultArchive, downloadBlob } from "../lib/video/resultArchive";
@@ -19,8 +21,17 @@ export function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
+  const [processingMode, setProcessingMode] = useState<ProcessingMode>("browser");
+  const [sidecarUrl, setSidecarUrl] = useState("http://127.0.0.1:3210");
+  const [sidecarToken, setSidecarToken] = useState("");
+  const [sidecarState, setSidecarState] = useState<SidecarConnectionState>("idle");
+  const [sidecarMessage, setSidecarMessage] = useState("启动 sidecar 后进行配对");
+  const [sidecarHealth, setSidecarHealth] = useState<SidecarHealth | null>(null);
   const itemsRef = useRef<VideoQueueItem[]>([]);
-  const processor = useBatchVideoProcessor();
+  const sidecarConnection = sidecarState === "ready"
+    ? { baseUrl: sidecarUrl, token: sidecarToken.trim() }
+    : undefined;
+  const processor = useBatchVideoProcessor({ mode: processingMode, sidecar: sidecarConnection });
   const activeItem = items.find((item) => item.id === activeId) ?? items[0] ?? null;
   const activeState = activeItem ? processor.states[activeItem.id] : undefined;
   const completed = items.filter((item) => processor.states[item.id]?.phase === "success").length;
@@ -148,6 +159,29 @@ export function App() {
     }
   };
 
+  const resetSidecarConnection = (message: string) => {
+    setSidecarState("idle");
+    setSidecarHealth(null);
+    setSidecarMessage(message);
+  };
+
+  const handleConnectSidecar = async () => {
+    if (!sidecarToken.trim() || sidecarState === "checking") return;
+    setSidecarState("checking");
+    setSidecarMessage("正在验证回环地址、令牌与编码器探测结果…");
+    try {
+      const health = await checkSidecar({ baseUrl: sidecarUrl, token: sidecarToken.trim() });
+      if (!health.ready) throw new Error("sidecar 尚未就绪");
+      setSidecarHealth(health);
+      setSidecarState("ready");
+      setSidecarMessage(`已连接 ${health.capabilities.platform}/${health.capabilities.arch} · 码率容差 ±${Math.round(health.bitrateTolerance * 100)}%`);
+    } catch (reason) {
+      setSidecarHealth(null);
+      setSidecarState("error");
+      setSidecarMessage(reason instanceof Error ? reason.message : "无法连接本机 sidecar");
+    }
+  };
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -157,7 +191,7 @@ export function App() {
           <small>去印台</small>
         </a>
         <div className="topbar__status">
-          <span><Activity size={14} /> ENGINE READY</span>
+          <span><Activity size={14} /> {processingMode === "browser" ? "BROWSER READY" : sidecarState === "ready" ? "SIDECAR READY" : "SIDECAR OFFLINE"}</span>
           <span><LockKeyhole size={14} /> LOCAL ONLY</span>
         </div>
       </header>
@@ -191,10 +225,26 @@ export function App() {
               completed={completed}
               remaining={remaining}
               downloadingAll={downloadingAll}
+              mode={processingMode}
+              sidecarUrl={sidecarUrl}
+              sidecarToken={sidecarToken}
+              sidecarState={sidecarState}
+              sidecarMessage={sidecarMessage}
+              sidecarHealth={sidecarHealth}
               onProcess={() => void processor.run(items)}
               onCancel={processor.cancel}
               onClearQueue={handleReset}
               onDownloadAll={() => void handleDownloadAll()}
+              onModeChange={setProcessingMode}
+              onSidecarUrlChange={(value) => {
+                setSidecarUrl(value);
+                resetSidecarConnection("地址已更改，请重新连接");
+              }}
+              onSidecarTokenChange={(value) => {
+                setSidecarToken(value);
+                resetSidecarConnection("令牌已更改，请重新连接");
+              }}
+              onConnectSidecar={() => void handleConnectSidecar()}
             />
             <VideoPreview
               asset={activeItem.asset}
@@ -221,7 +271,7 @@ export function App() {
       </main>
 
       <footer>
-        <span>所有帧均在本机浏览器内处理</span>
+        <span>所有媒体处理均留在当前设备</span>
         <span>仅处理你拥有权利或已获授权的视频</span>
       </footer>
     </div>

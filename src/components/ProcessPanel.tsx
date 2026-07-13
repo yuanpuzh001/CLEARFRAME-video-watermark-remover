@@ -1,6 +1,9 @@
 import { CircleStop, Download, Sparkles, Trash2, TriangleAlert } from "lucide-react";
+import type { ProcessingMode } from "../hooks/useBatchVideoProcessor";
+import type { SidecarHealth } from "../lib/sidecar/client";
 import { WORKFLOW_LABELS, WORKFLOW_SECTIONS } from "../lib/ui/workflowLabels";
 import type { ProcessingState } from "../types/video";
+import { ProcessingModeControl, type SidecarConnectionState } from "./ProcessingModeControl";
 
 interface ProcessPanelProps {
   state: ProcessingState;
@@ -8,10 +11,20 @@ interface ProcessPanelProps {
   completed: number;
   remaining: number;
   downloadingAll: boolean;
+  mode: ProcessingMode;
+  sidecarUrl: string;
+  sidecarToken: string;
+  sidecarState: SidecarConnectionState;
+  sidecarMessage: string;
+  sidecarHealth: SidecarHealth | null;
   onProcess: () => void;
   onCancel: () => void;
   onClearQueue: () => void;
   onDownloadAll: () => void;
+  onModeChange: (mode: ProcessingMode) => void;
+  onSidecarUrlChange: (value: string) => void;
+  onSidecarTokenChange: (value: string) => void;
+  onConnectSidecar: () => void;
 }
 
 export function ProcessPanel({
@@ -20,10 +33,20 @@ export function ProcessPanel({
   completed,
   remaining,
   downloadingAll,
+  mode,
+  sidecarUrl,
+  sidecarToken,
+  sidecarState,
+  sidecarMessage,
+  sidecarHealth,
   onProcess,
   onCancel,
   onClearQueue,
   onDownloadAll,
+  onModeChange,
+  onSidecarUrlChange,
+  onSidecarTokenChange,
+  onConnectSidecar,
 }: ProcessPanelProps) {
   const busy = state.phase === "loading-engine" || state.phase === "processing";
   const buttonLabel = total === 1
@@ -35,6 +58,7 @@ export function ProcessPanel({
     ? "下载全部视频"
     : `下载已完成 ${completed} 个`;
   const progress = Math.round(state.progress * 100);
+  const nativeUnavailable = mode === "native" && sidecarState !== "ready";
 
   return (
     <section id={WORKFLOW_SECTIONS.process.id} className="process-panel" aria-labelledby="process-heading">
@@ -58,6 +82,20 @@ export function ProcessPanel({
         </div>
         {state.error && <p className="process-panel__error"><TriangleAlert size={15} />{state.error}</p>}
       </div>
+
+      <ProcessingModeControl
+        mode={mode}
+        sidecarUrl={sidecarUrl}
+        token={sidecarToken}
+        connectionState={sidecarState}
+        connectionMessage={sidecarMessage}
+        health={sidecarHealth}
+        disabled={busy}
+        onModeChange={onModeChange}
+        onSidecarUrlChange={onSidecarUrlChange}
+        onTokenChange={onSidecarTokenChange}
+        onConnect={onConnectSidecar}
+      />
 
       <div className="process-panel__copy">
         <h2 id="process-heading">{total > 1 ? "批量去水印" : "一键去水印"}</h2>
@@ -90,7 +128,13 @@ export function ProcessPanel({
             </button>
           )}
           {remaining > 0 && (
-            <button className="button button--primary button--large" type="button" onClick={onProcess}>
+            <button
+              className="button button--primary button--large"
+              type="button"
+              disabled={nativeUnavailable}
+              title={nativeUnavailable ? "请先连接本机 sidecar，或切换到浏览器模式" : undefined}
+              onClick={onProcess}
+            >
               <Sparkles size={19} /> {buttonLabel}
             </button>
           )}

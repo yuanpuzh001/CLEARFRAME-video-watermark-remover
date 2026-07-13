@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { processVideo, terminateVideoEngine } from "../lib/ffmpeg/processor";
+import { processVideoWithSidecar, type SidecarConnection } from "../lib/sidecar/client";
 import { runSequentialVideoQueue } from "../lib/video/batchQueue";
 import type { BatchItemProcessingState, VideoQueueItem } from "../types/video";
+
+export type ProcessingMode = "browser" | "native";
+
+interface BatchProcessorOptions {
+  mode?: ProcessingMode;
+  sidecar?: SidecarConnection;
+}
 
 const READY_STATE: BatchItemProcessingState = {
   phase: "idle",
@@ -10,8 +18,9 @@ const READY_STATE: BatchItemProcessingState = {
   result: null,
 };
 
-function friendlyError(reason: unknown): string {
+function friendlyError(reason: unknown, mode: ProcessingMode): string {
   const message = reason instanceof Error ? reason.message : "未知错误";
+  if (mode === "native") return `本地加速处理失败：${message}。可切换到浏览器模式继续处理。`;
   if (/memory|allocation|out of bounds/i.test(message)) {
     return "浏览器可用内存不足，请关闭其他页面或换用更短的视频。";
   }
@@ -21,7 +30,9 @@ function friendlyError(reason: unknown): string {
   return `处理失败：${message}`;
 }
 
-export function useBatchVideoProcessor() {
+export function useBatchVideoProcessor(options: BatchProcessorOptions = {}) {
+  const mode = options.mode ?? "browser";
+  const sidecar = options.sidecar;
   const [states, setStates] = useState<Record<string, BatchItemProcessingState>>({});
   const statesRef = useRef(states);
   const controllerRef = useRef<AbortController | null>(null);
@@ -62,20 +73,27 @@ export function useBatchVideoProcessor() {
       return next;
     });
 
+    const processItem = mode === "native"
+      ? (file: File, region: VideoQueueItem["region"], onProgress: (progress: number, message: string) => void, signal: AbortSignal) => {
+          if (!sidecar) throw new Error("尚未连接本地 sidecar");
+          return processVideoWithSidecar(file, region, sidecar, onProgress, signal);
+        }
+      : (file: File, region: VideoQueueItem["region"], onProgress: (progress: number, message: string) => void, signal: AbortSignal) => processVideo(
+          file,
+          region,
+          ({ progress, message }) => onProgress(progress, message),
+          signal,
+        );
+
     await runSequentialVideoQueue(
       targets,
-      (file, region, onProgress, signal) => processVideo(
-        file,
-        region,
-        ({ progress, message }) => onProgress(progress, message),
-        signal,
-      ),
+      processItem,
       {
         onStart: (item) => {
           if (isCurrent()) updateItem(item.id, {
             phase: "loading-engine",
             progress: 0,
-            message: "正在启动本地引擎…",
+            message: mode === "native" ? "正在连接本机 sidecar…" : "正在启动浏览器引擎…",
             result: null,
           });
         },
@@ -100,7 +118,7 @@ export function useBatchVideoProcessor() {
             phase: "error",
             progress: 0,
             message: "处理失败",
-            error: friendlyError(reason),
+            error: friendlyError(reason, mode),
             result: null,
           });
         },
@@ -124,7 +142,7 @@ export function useBatchVideoProcessor() {
     );
 
     if (controllerRef.current === controller) controllerRef.current = null;
-  }, [replaceStates, updateItem]);
+  }, [mode, replaceStates, sidecar, updateItem]);
 
   const cancel = useCallback(() => controllerRef.current?.abort(), []);
 
