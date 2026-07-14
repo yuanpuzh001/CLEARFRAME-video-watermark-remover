@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   process.stdout.write([ 
     "CLEARFRAME 本地加速服务已启动",
     `地址：http://${config.host}:${config.port}`,
-    `配对令牌：${config.token}`,
+    "配对方式：网页一键安全配对（认证令牌全程隐藏）",
     `H.264：${capabilities.selected.h264 ?? "不可用"}`,
     `HEVC：${capabilities.selected.hevc ?? "不可用"}`,
     `码率容差：±${(config.bitrateTolerance * 100).toFixed(0)}%`,

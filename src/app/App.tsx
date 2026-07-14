@@ -8,7 +8,7 @@ import { ResultPanel } from "../components/ResultPanel";
 import { WorkflowNavigation } from "../components/WorkflowNavigation";
 import type { SidecarConnectionState } from "../components/ProcessingModeControl";
 import { useBatchVideoProcessor, type ProcessingMode } from "../hooks/useBatchVideoProcessor";
-import { checkSidecar, type SidecarHealth } from "../lib/sidecar/client";
+import { checkSidecar, getVeoCliStatus, pairSidecar, selectVeoCli, type SidecarHealth, type VeoCliStatus } from "../lib/sidecar/client";
 import { WORKFLOW_SECTIONS } from "../lib/ui/workflowLabels";
 import { DEFAULT_REGION } from "../lib/video/region";
 import { createResultArchive, downloadBlob } from "../lib/video/resultArchive";
@@ -23,13 +23,16 @@ export function App() {
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("browser");
   const [sidecarUrl, setSidecarUrl] = useState("http://127.0.0.1:3210");
-  const [sidecarToken, setSidecarToken] = useState("");
   const [sidecarState, setSidecarState] = useState<SidecarConnectionState>("idle");
   const [sidecarMessage, setSidecarMessage] = useState("启动 sidecar 后进行配对");
+  const [sidecarPairingCode, setSidecarPairingCode] = useState("");
   const [sidecarHealth, setSidecarHealth] = useState<SidecarHealth | null>(null);
+  const [veoCliStatus, setVeoCliStatus] = useState<VeoCliStatus | null>(null);
+  const [veoSelecting, setVeoSelecting] = useState(false);
+  const [veoSelectionError, setVeoSelectionError] = useState("");
   const itemsRef = useRef<VideoQueueItem[]>([]);
   const sidecarConnection = sidecarState === "ready"
-    ? { baseUrl: sidecarUrl, token: sidecarToken.trim() }
+    ? { baseUrl: sidecarUrl }
     : undefined;
   const processor = useBatchVideoProcessor({ mode: processingMode, sidecar: sidecarConnection });
   const activeItem = items.find((item) => item.id === activeId) ?? items[0] ?? null;
@@ -54,7 +57,7 @@ export function App() {
         phase: runningState?.phase === "processing" ? "processing" : "loading-engine",
         progress: totalProgress,
         message: runningItem
-          ? `正在处理 ${runningItem.asset.file.name} · ${position}/${items.length}`
+          ? `${runningState?.message || "正在处理"} · ${runningItem.asset.file.name} · ${position}/${items.length}`
           : "队列准备中…",
       };
     }
@@ -132,7 +135,7 @@ export function App() {
   };
 
   const handleRegionChange = (nextRegion: NormalizedRegion) => {
-    if (!activeItem) return;
+    if (!activeItem || processingMode === "veo") return;
     setItems((current) => current.map((item) => (
       item.id === activeItem.id ? { ...item, region: nextRegion } : item
     )));
@@ -143,7 +146,7 @@ export function App() {
     if (downloadingAll) return;
     const results = items.flatMap((item) => {
       const result = processor.states[item.id]?.result;
-      return result ? [{ name: cleanOutputName(item.asset.file.name), blob: result }] : [];
+      return result ? [{ name: result.outputName || cleanOutputName(item.asset.file.name), blob: result.blob }] : [];
     });
     if (results.length === 0) return;
 
@@ -163,23 +166,62 @@ export function App() {
     setSidecarState("idle");
     setSidecarHealth(null);
     setSidecarMessage(message);
+    setSidecarPairingCode("");
+    setVeoCliStatus(null);
+    setVeoSelectionError("");
   };
 
   const handleConnectSidecar = async () => {
-    if (!sidecarToken.trim() || sidecarState === "checking") return;
+    if (sidecarState === "checking") return;
     setSidecarState("checking");
-    setSidecarMessage("正在验证回环地址、令牌与编码器探测结果…");
+    setSidecarPairingCode("");
+    setSidecarMessage("正在检查本机安全会话…");
     try {
-      const health = await checkSidecar({ baseUrl: sidecarUrl, token: sidecarToken.trim() });
+      const connection = { baseUrl: sidecarUrl };
+      let health: SidecarHealth;
+      try {
+        health = await checkSidecar(connection);
+      } catch {
+        await pairSidecar(connection, (challenge) => {
+          setSidecarPairingCode(challenge.code);
+          setSidecarMessage(challenge.status === "pending"
+            ? `请在系统弹窗核对并确认：${challenge.code.slice(0, 3)} ${challenge.code.slice(3)}`
+            : "系统已确认，正在建立安全会话…");
+        });
+        health = await checkSidecar(connection);
+      }
       if (!health.ready) throw new Error("sidecar 尚未就绪");
+      const veoStatus = await getVeoCliStatus(connection);
       setSidecarHealth(health);
+      setVeoCliStatus(veoStatus);
       setSidecarState("ready");
-      setSidecarMessage(`已连接 ${health.capabilities.platform}/${health.capabilities.arch} · 码率容差 ±${Math.round(health.bitrateTolerance * 100)}%`);
+      setSidecarPairingCode("");
+      setSidecarMessage(`已安全配对 ${health.capabilities.platform}/${health.capabilities.arch} · 码率容差 ±${Math.round(health.bitrateTolerance * 100)}%`);
     } catch (reason) {
       setSidecarHealth(null);
       setSidecarState("error");
+      setSidecarPairingCode("");
       setSidecarMessage(reason instanceof Error ? reason.message : "无法连接本机 sidecar");
     }
+  };
+
+  const handleSelectVeoCli = async () => {
+    if (!sidecarConnection || veoSelecting) return;
+    setVeoSelecting(true);
+    setVeoSelectionError("");
+    try {
+      const status = await selectVeoCli(sidecarConnection);
+      setVeoCliStatus(status);
+    } catch (reason) {
+      setVeoSelectionError(reason instanceof Error ? reason.message : "无法打开本机 CLI 选择器");
+    } finally {
+      setVeoSelecting(false);
+    }
+  };
+
+  const handleUseDelogo = () => {
+    if (!window.confirm("确认离开 VEO 实验模式并改用 CLEARFRAME delogo？当前视频不会自动开始处理。")) return;
+    setProcessingMode(sidecarState === "ready" ? "native" : "browser");
   };
 
   return (
@@ -191,7 +233,11 @@ export function App() {
           <small>去印台</small>
         </a>
         <div className="topbar__status">
-          <span><Activity size={14} /> {processingMode === "browser" ? "BROWSER READY" : sidecarState === "ready" ? "SIDECAR READY" : "SIDECAR OFFLINE"}</span>
+          <span><Activity size={14} /> {processingMode === "browser"
+            ? "BROWSER READY"
+            : processingMode === "veo" && sidecarState === "ready" && veoCliStatus?.selection?.valid
+              ? "VEO VERIFIED"
+              : sidecarState === "ready" ? "SIDECAR READY" : "SIDECAR OFFLINE"}</span>
           <span><LockKeyhole size={14} /> LOCAL ONLY</span>
         </div>
       </header>
@@ -227,7 +273,7 @@ export function App() {
               downloadingAll={downloadingAll}
               mode={processingMode}
               sidecarUrl={sidecarUrl}
-              sidecarToken={sidecarToken}
+              sidecarPairingCode={sidecarPairingCode}
               sidecarState={sidecarState}
               sidecarMessage={sidecarMessage}
               sidecarHealth={sidecarHealth}
@@ -240,15 +286,17 @@ export function App() {
                 setSidecarUrl(value);
                 resetSidecarConnection("地址已更改，请重新连接");
               }}
-              onSidecarTokenChange={(value) => {
-                setSidecarToken(value);
-                resetSidecarConnection("令牌已更改，请重新连接");
-              }}
               onConnectSidecar={() => void handleConnectSidecar()}
+              veoCliStatus={veoCliStatus}
+              veoSelecting={veoSelecting}
+              veoSelectionError={veoSelectionError}
+              onSelectVeoCli={() => void handleSelectVeoCli()}
+              onUseDelogo={handleUseDelogo}
             />
             <VideoPreview
               asset={activeItem.asset}
               region={activeItem.region}
+              automaticDetection={processingMode === "veo"}
               onRegionChange={handleRegionChange}
             />
             <div id={WORKFLOW_SECTIONS.outputVideo.id} className="workflow-output-slot">

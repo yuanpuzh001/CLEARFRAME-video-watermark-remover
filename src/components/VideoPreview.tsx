@@ -8,12 +8,23 @@ interface VideoPreviewProps {
   asset: VideoAsset;
   region: NormalizedRegion;
   onRegionChange: (region: NormalizedRegion) => void;
+  automaticDetection?: boolean;
 }
 
-export function VideoPreview({ asset, region, onRegionChange }: VideoPreviewProps) {
+export function VideoPreview({
+  asset,
+  region,
+  onRegionChange,
+  automaticDetection = false,
+}: VideoPreviewProps) {
   return (
     <section id={WORKFLOW_SECTIONS.watermarkSelection.id} className="workspace-card" aria-labelledby="region-heading">
-      <RegionEditor asset={asset} region={region} onChange={onRegionChange} />
+      <RegionEditor
+        asset={asset}
+        region={region}
+        automaticDetection={automaticDetection}
+        onChange={onRegionChange}
+      />
       <div className="asset-strip">
         <FileVideo2 size={19} />
         <div className="asset-strip__name">

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { processVideo, terminateVideoEngine } from "../lib/ffmpeg/processor";
-import { processVideoWithSidecar, type SidecarConnection } from "../lib/sidecar/client";
+import { processVideoWithSidecar, processVideoWithVeoSidecar, type SidecarConnection } from "../lib/sidecar/client";
 import { runSequentialVideoQueue } from "../lib/video/batchQueue";
 import type { BatchItemProcessingState, VideoQueueItem } from "../types/video";
 
-export type ProcessingMode = "browser" | "native";
+export type ProcessingMode = "browser" | "native" | "veo";
 
 interface BatchProcessorOptions {
   mode?: ProcessingMode;
@@ -21,6 +21,7 @@ const READY_STATE: BatchItemProcessingState = {
 function friendlyError(reason: unknown, mode: ProcessingMode): string {
   const message = reason instanceof Error ? reason.message : "未知错误";
   if (mode === "native") return `本地加速处理失败：${message}。可切换到浏览器模式继续处理。`;
+  if (mode === "veo") return `VEO 实验处理失败：${message}。如需改用 delogo，请手动切换处理模式。`;
   if (/memory|allocation|out of bounds/i.test(message)) {
     return "浏览器可用内存不足，请关闭其他页面或换用更短的视频。";
   }
@@ -28,6 +29,12 @@ function friendlyError(reason: unknown, mode: ProcessingMode): string {
     return "本地视频引擎加载失败，请刷新页面后重试。";
   }
   return `处理失败：${message}`;
+}
+
+function progressPhase(mode: ProcessingMode, progress: number): BatchItemProcessingState["phase"] {
+  if (progress <= 0.01) return "loading-engine";
+  if (mode === "browser" && progress < 0.1) return "loading-engine";
+  return "processing";
 }
 
 export function useBatchVideoProcessor(options: BatchProcessorOptions = {}) {
@@ -76,14 +83,32 @@ export function useBatchVideoProcessor(options: BatchProcessorOptions = {}) {
     const processItem = mode === "native"
       ? (file: File, region: VideoQueueItem["region"], onProgress: (progress: number, message: string) => void, signal: AbortSignal) => {
           if (!sidecar) throw new Error("尚未连接本地 sidecar");
-          return processVideoWithSidecar(file, region, sidecar, onProgress, signal);
+          return processVideoWithSidecar(file, region, sidecar, onProgress, signal).then((blob) => ({
+            blob,
+            mode: "native" as const,
+            outputName: file.name.replace(/\.mp4$/i, "-clean.mp4"),
+          }));
         }
+      : mode === "veo"
+        ? (file: File, _region: VideoQueueItem["region"], onProgress: (progress: number, message: string) => void, signal: AbortSignal) => {
+            if (!sidecar) throw new Error("尚未连接本地 sidecar");
+            return processVideoWithVeoSidecar(file, sidecar, onProgress, signal).then(({ blob, outputName, details }) => ({
+              blob,
+              mode: "veo" as const,
+              outputName,
+              veo: details,
+            }));
+          }
       : (file: File, region: VideoQueueItem["region"], onProgress: (progress: number, message: string) => void, signal: AbortSignal) => processVideo(
           file,
           region,
           ({ progress, message }) => onProgress(progress, message),
           signal,
-        );
+        ).then((blob) => ({
+          blob,
+          mode: "browser" as const,
+          outputName: file.name.replace(/\.mp4$/i, "-clean.mp4"),
+        }));
 
     await runSequentialVideoQueue(
       targets,
@@ -93,13 +118,13 @@ export function useBatchVideoProcessor(options: BatchProcessorOptions = {}) {
           if (isCurrent()) updateItem(item.id, {
             phase: "loading-engine",
             progress: 0,
-            message: mode === "native" ? "正在连接本机 sidecar…" : "正在启动浏览器引擎…",
+            message: mode === "browser" ? "正在启动浏览器引擎…" : "正在连接本机 sidecar…",
             result: null,
           });
         },
         onProgress: (item, progress, message) => {
           if (isCurrent()) updateItem(item.id, {
-            phase: progress < 0.1 ? "loading-engine" : "processing",
+            phase: progressPhase(mode, progress),
             progress,
             message,
             result: null,

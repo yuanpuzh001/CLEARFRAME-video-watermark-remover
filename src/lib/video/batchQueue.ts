@@ -1,16 +1,16 @@
-import type { NormalizedRegion, VideoQueueItem } from "../../types/video";
+import type { NormalizedRegion, ProcessedVideoResult, VideoQueueItem } from "../../types/video";
 
 export type QueueItemProcessor = (
   file: File,
   region: NormalizedRegion,
   onProgress: (progress: number, message: string) => void,
   signal: AbortSignal,
-) => Promise<Blob>;
+) => Promise<ProcessedVideoResult>;
 
 interface QueueCallbacks {
   onStart: (item: VideoQueueItem) => void;
   onProgress: (item: VideoQueueItem, progress: number, message: string) => void;
-  onSuccess: (item: VideoQueueItem, result: Blob) => void;
+  onSuccess: (item: VideoQueueItem, result: ProcessedVideoResult) => void;
   onError: (item: VideoQueueItem, reason: unknown) => void;
   onCancelled: (items: VideoQueueItem[]) => void;
 }

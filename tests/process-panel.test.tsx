@@ -1,8 +1,38 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProcessPanel } from "../src/components/ProcessPanel";
 
+afterEach(cleanup);
+
 describe("ProcessPanel", () => {
+  it("marks VEO algorithm progress as an estimate while keeping a determinate progressbar", () => {
+    render(
+      <ProcessPanel
+        state={{ phase: "processing", progress: 0.43, message: "VEO 算法处理中 · 预计 43% · 已耗时 01:12" }}
+        total={1}
+        completed={0}
+        remaining={1}
+        downloadingAll={false}
+        mode="veo"
+        sidecarUrl="http://127.0.0.1:3210"
+        sidecarPairingCode="482731"
+        sidecarState="ready"
+        sidecarMessage="已连接"
+        sidecarHealth={null}
+        onProcess={vi.fn()}
+        onCancel={vi.fn()}
+        onClearQueue={vi.fn()}
+        onDownloadAll={vi.fn()}
+        onModeChange={vi.fn()}
+        onSidecarUrlChange={vi.fn()}
+        onConnectSidecar={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("预计", { selector: "small" })).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "批量处理进度" })).toHaveAttribute("aria-valuetext", expect.stringContaining("预计 43%"));
+  });
+
   it("offers one archive download after a batch completes", () => {
     const onDownloadAll = vi.fn();
     const onClearQueue = vi.fn();
@@ -15,7 +45,7 @@ describe("ProcessPanel", () => {
         downloadingAll={false}
         mode="browser"
         sidecarUrl="http://127.0.0.1:3210"
-        sidecarToken=""
+        sidecarPairingCode=""
         sidecarState="idle"
         sidecarMessage="等待连接"
         sidecarHealth={null}
@@ -25,7 +55,6 @@ describe("ProcessPanel", () => {
         onDownloadAll={onDownloadAll}
         onModeChange={vi.fn()}
         onSidecarUrlChange={vi.fn()}
-        onSidecarTokenChange={vi.fn()}
         onConnectSidecar={vi.fn()}
       />,
     );
@@ -51,7 +80,7 @@ describe("ProcessPanel", () => {
         downloadingAll={false}
         mode="native"
         sidecarUrl="http://127.0.0.1:3210"
-        sidecarToken=""
+        sidecarPairingCode=""
         sidecarState="idle"
         sidecarMessage="等待连接"
         sidecarHealth={null}
@@ -61,12 +90,66 @@ describe("ProcessPanel", () => {
         onDownloadAll={vi.fn()}
         onModeChange={vi.fn()}
         onSidecarUrlChange={vi.fn()}
-        onSidecarTokenChange={vi.fn()}
         onConnectSidecar={vi.fn()}
       />,
     );
 
     expect(screen.getByRole("button", { name: "一键去水印" })).toBeDisabled();
     expect(onProcess).not.toHaveBeenCalled();
+  });
+
+  it("keeps VEO processing disabled until the selected CLI is verified", () => {
+    const { rerender, container } = render(
+      <ProcessPanel
+        state={{ phase: "idle", progress: 0, message: "1 个视频等待处理" }}
+        total={1}
+        completed={0}
+        remaining={1}
+        downloadingAll={false}
+        mode="veo"
+        sidecarUrl="http://127.0.0.1:3210"
+        sidecarPairingCode=""
+        sidecarState="ready"
+        sidecarMessage="已连接"
+        sidecarHealth={null}
+        onProcess={vi.fn()}
+        onCancel={vi.fn()}
+        onClearQueue={vi.fn()}
+        onDownloadAll={vi.fn()}
+        onModeChange={vi.fn()}
+        onSidecarUrlChange={vi.fn()}
+        onConnectSidecar={vi.fn()}
+      />,
+    );
+    expect(within(container).getByRole("button", { name: "一键去水印" })).toBeDisabled();
+
+    rerender(
+      <ProcessPanel
+        state={{ phase: "idle", progress: 0, message: "1 个视频等待处理" }}
+        total={1}
+        completed={0}
+        remaining={1}
+        downloadingAll={false}
+        mode="veo"
+        sidecarUrl="http://127.0.0.1:3210"
+        sidecarPairingCode=""
+        sidecarState="ready"
+        sidecarMessage="已连接"
+        sidecarHealth={null}
+        veoCliStatus={{
+          releaseVersion: "v0.6.4-demo",
+          releaseUrl: "release",
+          selection: { path: "/fake", fileName: "fake", sizeBytes: 1, sha256: "sha", platform: "darwin", version: "v0.6.4-demo", valid: true },
+        }}
+        onProcess={vi.fn()}
+        onCancel={vi.fn()}
+        onClearQueue={vi.fn()}
+        onDownloadAll={vi.fn()}
+        onModeChange={vi.fn()}
+        onSidecarUrlChange={vi.fn()}
+        onConnectSidecar={vi.fn()}
+      />,
+    );
+    expect(within(container).getByRole("button", { name: "一键去水印" })).toBeEnabled();
   });
 });

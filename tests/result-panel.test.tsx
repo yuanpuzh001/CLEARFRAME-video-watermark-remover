@@ -31,7 +31,7 @@ describe("ResultPanel download URL", () => {
             duration: 6,
             size: 5,
           }}
-          result={new Blob(["result"], { type: "video/mp4" })}
+          result={{ blob: new Blob(["result"], { type: "video/mp4" }), mode: "browser", outputName: "clip-clean.mp4" }}
           onReprocess={vi.fn()}
         />
       </StrictMode>,
@@ -68,7 +68,7 @@ describe("ResultPanel download URL", () => {
           duration: 6,
           size: 5,
         }}
-        result={new Blob(["result"], { type: "video/mp4" })}
+        result={{ blob: new Blob(["result"], { type: "video/mp4" }), mode: "browser", outputName: "batch-clean.mp4" }}
         autoScroll={false}
         onReprocess={vi.fn()}
       />,
@@ -76,5 +76,38 @@ describe("ResultPanel download URL", () => {
 
     await screen.findByRole("link", { name: "下载视频" });
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("shows media integrity and bitrate tolerance as separate VEO results", () => {
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:veo-result") });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    render(
+      <ResultPanel
+        asset={{ file: new File(["video"], "veo.mp4"), url: "blob:source", width: 1920, height: 1080, duration: 6, size: 5 }}
+        result={{
+          blob: new Blob(["result"]),
+          mode: "veo",
+          outputName: "veo-veo-clean.mp4",
+          veo: {
+            cliVersion: "v0.6.4-demo",
+            cliSha256: "1234567890abcdef1234",
+            cliElapsedMs: 139000,
+            mediaIntegrityPassed: true,
+            bitrateWithinTolerance: false,
+            bitrateDelta: -0.2786,
+            sourceVideoBitrate: 8000000,
+            actualVideoBitrate: 5771200,
+            mediaIntegrity: { supported: true, passed: true, videoBitstreamEqual: true, audioBitstreamEqual: true },
+          },
+        }}
+        autoScroll={false}
+        onReprocess={vi.fn()}
+      />,
+    );
+
+    const verification = screen.getByLabelText("VEO 媒体验收结果");
+    expect(verification).toHaveTextContent("媒体完整性通过");
+    expect(verification).toHaveTextContent("视频码率容差超出 · -27.86%");
+    expect(verification).toHaveTextContent("SHA 相同");
   });
 });

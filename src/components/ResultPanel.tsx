@@ -1,13 +1,13 @@
-import { Check, Download, RefreshCcw } from "lucide-react";
+import { Check, CircleAlert, CircleCheck, Download, RefreshCcw } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject, type SyntheticEvent } from "react";
 import { WORKFLOW_LABELS } from "../lib/ui/workflowLabels";
 import { syncMediaPause, syncMediaPlay, syncMediaRate, syncMediaTime } from "../lib/video/mediaSync";
 import { cleanOutputName, formatBytes } from "../lib/video/validation";
-import type { VideoAsset } from "../types/video";
+import type { ProcessedVideoResult, VideoAsset } from "../types/video";
 
 interface ResultPanelProps {
   asset: VideoAsset;
-  result: Blob;
+  result: ProcessedVideoResult;
   autoScroll?: boolean;
   onReprocess: () => void;
 }
@@ -17,7 +17,7 @@ export function ResultPanel({ asset, result, autoScroll = true, onReprocess }: R
   const sectionRef = useRef<HTMLElement>(null);
   const beforeVideoRef = useRef<HTMLVideoElement>(null);
   const afterVideoRef = useRef<HTMLVideoElement>(null);
-  const outputName = cleanOutputName(asset.file.name);
+  const outputName = result.outputName || cleanOutputName(asset.file.name);
 
   const withPeer = (
     event: SyntheticEvent<HTMLVideoElement>,
@@ -29,7 +29,7 @@ export function ResultPanel({ asset, result, autoScroll = true, onReprocess }: R
   };
 
   useEffect(() => {
-    const nextResultUrl = URL.createObjectURL(result);
+    const nextResultUrl = URL.createObjectURL(result.blob);
     setResultUrl(nextResultUrl);
     const frame = autoScroll
       ? requestAnimationFrame(() => {
@@ -64,6 +64,26 @@ export function ResultPanel({ asset, result, autoScroll = true, onReprocess }: R
           </a>
         </div>
       </div>
+
+      {result.veo && (
+        <div className="veo-verification" aria-label="VEO 媒体验收结果">
+          <div className={result.veo.mediaIntegrityPassed ? "is-pass" : "is-fail"}>
+            {result.veo.mediaIntegrityPassed ? <CircleCheck size={17} /> : <CircleAlert size={17} />}
+            <span><small>媒体完整性</small><strong>{result.veo.mediaIntegrityPassed ? "通过" : "未通过"}</strong></span>
+            <p>处理视频轨 → 最终视频轨：{result.veo.mediaIntegrity.videoBitstreamEqual ? "SHA 相同" : "SHA 不同"}<br />原片音频轨 → 最终音频轨：{result.veo.mediaIntegrity.audioBitstreamEqual ? "SHA 相同" : "SHA 不同"}</p>
+          </div>
+          <div className={result.veo.bitrateWithinTolerance ? "is-pass" : "is-warn"}>
+            {result.veo.bitrateWithinTolerance ? <CircleCheck size={17} /> : <CircleAlert size={17} />}
+            <span><small>视频码率容差</small><strong>{result.veo.bitrateWithinTolerance ? "通过" : "超出"} · {(result.veo.bitrateDelta * 100).toFixed(2)}%</strong></span>
+            <p>这是独立质量指标；超出容差不会通过二次编码或填充文件伪装恢复。</p>
+          </div>
+          <div className="veo-verification__runtime">
+            <small>VEO CLI</small>
+            <strong>{result.veo.cliVersion} · {(result.veo.cliElapsedMs / 1000).toFixed(1)}s</strong>
+            <code title={result.veo.cliSha256}>{result.veo.cliSha256.slice(0, 16)}…</code>
+          </div>
+        </div>
+      )}
 
       <div className="compare-grid">
         <figure>
@@ -101,7 +121,7 @@ export function ResultPanel({ asset, result, autoScroll = true, onReprocess }: R
       <div className="result-file">
         <span className="result-file__signal" aria-hidden="true" />
         <div><strong>{outputName}</strong><span>H.264 · MP4 · 本地生成</span></div>
-        <div><span>输出大小</span><strong>{formatBytes(result.size)}</strong></div>
+        <div><span>输出大小</span><strong>{formatBytes(result.blob.size)}</strong></div>
         <div><span>隐私状态</span><strong>未上传</strong></div>
       </div>
     </section>

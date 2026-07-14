@@ -1,6 +1,6 @@
 import { CircleStop, Download, Sparkles, Trash2, TriangleAlert } from "lucide-react";
 import type { ProcessingMode } from "../hooks/useBatchVideoProcessor";
-import type { SidecarHealth } from "../lib/sidecar/client";
+import type { SidecarHealth, VeoCliStatus } from "../lib/sidecar/client";
 import { WORKFLOW_LABELS, WORKFLOW_SECTIONS } from "../lib/ui/workflowLabels";
 import type { ProcessingState } from "../types/video";
 import { ProcessingModeControl, type SidecarConnectionState } from "./ProcessingModeControl";
@@ -13,7 +13,7 @@ interface ProcessPanelProps {
   downloadingAll: boolean;
   mode: ProcessingMode;
   sidecarUrl: string;
-  sidecarToken: string;
+  sidecarPairingCode: string;
   sidecarState: SidecarConnectionState;
   sidecarMessage: string;
   sidecarHealth: SidecarHealth | null;
@@ -23,8 +23,12 @@ interface ProcessPanelProps {
   onDownloadAll: () => void;
   onModeChange: (mode: ProcessingMode) => void;
   onSidecarUrlChange: (value: string) => void;
-  onSidecarTokenChange: (value: string) => void;
   onConnectSidecar: () => void;
+  veoCliStatus?: VeoCliStatus | null;
+  veoSelecting?: boolean;
+  veoSelectionError?: string;
+  onSelectVeoCli?: () => void;
+  onUseDelogo?: () => void;
 }
 
 export function ProcessPanel({
@@ -35,7 +39,7 @@ export function ProcessPanel({
   downloadingAll,
   mode,
   sidecarUrl,
-  sidecarToken,
+  sidecarPairingCode,
   sidecarState,
   sidecarMessage,
   sidecarHealth,
@@ -45,8 +49,12 @@ export function ProcessPanel({
   onDownloadAll,
   onModeChange,
   onSidecarUrlChange,
-  onSidecarTokenChange,
   onConnectSidecar,
+  veoCliStatus = null,
+  veoSelecting = false,
+  veoSelectionError = "",
+  onSelectVeoCli = () => undefined,
+  onUseDelogo = () => undefined,
 }: ProcessPanelProps) {
   const busy = state.phase === "loading-engine" || state.phase === "processing";
   const buttonLabel = total === 1
@@ -58,7 +66,9 @@ export function ProcessPanel({
     ? "下载全部视频"
     : `下载已完成 ${completed} 个`;
   const progress = Math.round(state.progress * 100);
+  const estimatedProgress = mode === "veo" && busy && progress >= 5 && progress < 84;
   const nativeUnavailable = mode === "native" && sidecarState !== "ready";
+  const veoUnavailable = mode === "veo" && (sidecarState !== "ready" || !veoCliStatus?.selection?.valid);
 
   return (
     <section id={WORKFLOW_SECTIONS.process.id} className="process-panel" aria-labelledby="process-heading">
@@ -67,16 +77,20 @@ export function ProcessPanel({
           <p className="eyebrow">{WORKFLOW_LABELS.process}</p>
           <div>
             <strong>{state.message}</strong>
-            <span>{progress}%</span>
+            <span className="process-panel__progress-value">
+              {estimatedProgress && <small>预计</small>}
+              {progress}%
+            </span>
           </div>
         </div>
         <div
-          className="process-panel__meter"
+          className={`process-panel__meter ${estimatedProgress ? "is-estimated" : ""}`}
           role="progressbar"
           aria-label="批量处理进度"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={progress}
+          aria-valuetext={estimatedProgress ? state.message : `${progress}% · ${state.message}`}
         >
           <span style={{ width: `${progress}%` }} />
         </div>
@@ -86,15 +100,19 @@ export function ProcessPanel({
       <ProcessingModeControl
         mode={mode}
         sidecarUrl={sidecarUrl}
-        token={sidecarToken}
+        pairingCode={sidecarPairingCode}
         connectionState={sidecarState}
         connectionMessage={sidecarMessage}
         health={sidecarHealth}
         disabled={busy}
         onModeChange={onModeChange}
         onSidecarUrlChange={onSidecarUrlChange}
-        onTokenChange={onSidecarTokenChange}
         onConnect={onConnectSidecar}
+        veoCliStatus={veoCliStatus}
+        veoSelecting={veoSelecting}
+        veoSelectionError={veoSelectionError}
+        onSelectVeoCli={onSelectVeoCli}
+        onUseDelogo={onUseDelogo}
       />
 
       <div className="process-panel__copy">
@@ -131,8 +149,12 @@ export function ProcessPanel({
             <button
               className="button button--primary button--large"
               type="button"
-              disabled={nativeUnavailable}
-              title={nativeUnavailable ? "请先连接本机 sidecar，或切换到浏览器模式" : undefined}
+              disabled={nativeUnavailable || veoUnavailable}
+              title={nativeUnavailable
+                ? "请先连接本机 sidecar，或切换到浏览器模式"
+                : veoUnavailable
+                  ? "请先连接本地服务并选择通过严格校验的 VEO CLI"
+                  : undefined}
               onClick={onProcess}
             >
               <Sparkles size={19} /> {buttonLabel}

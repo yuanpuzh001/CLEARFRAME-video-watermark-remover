@@ -17,7 +17,7 @@ describe("runSequentialVideoQueue", () => {
     const processItem: QueueItemProcessor = vi.fn(async (file) => {
       events.push(`process:${file.name}`);
       if (file.name === "two.mp4") throw new Error("bad video");
-      return new Blob([file.name]);
+      return { blob: new Blob([file.name]), mode: "browser" as const, outputName: `${file.name}-clean.mp4` };
     });
     const controller = new AbortController();
 

@@ -21,7 +21,11 @@ export type CommandRunner = (
 
 export const runCommand: CommandRunner = (command, args, options = {}) => new Promise((resolve, reject) => {
   const startedAt = performance.now();
-  const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"], signal: options.signal });
+  const child = spawn(command, args, {
+    stdio: ["ignore", "pipe", "pipe"],
+    signal: options.signal,
+    shell: false,
+  });
   let stdout = "";
   let stderr = "";
   const timer = options.timeoutMs

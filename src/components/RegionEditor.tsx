@@ -1,5 +1,5 @@
-import { Crosshair, Move, RotateCcw } from "lucide-react";
-import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { Crosshair, Move, RotateCcw, ScanSearch } from "lucide-react";
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { WORKFLOW_LABELS } from "../lib/ui/workflowLabels";
 import { clampRegion, DEFAULT_REGION, regionToPixels } from "../lib/video/region";
 import type { NormalizedRegion, VideoAsset } from "../types/video";
@@ -8,6 +8,7 @@ interface RegionEditorProps {
   asset: VideoAsset;
   region: NormalizedRegion;
   onChange: (region: NormalizedRegion) => void;
+  automaticDetection?: boolean;
 }
 
 type Interaction = {
@@ -17,12 +18,23 @@ type Interaction = {
   initial: NormalizedRegion;
 };
 
-export function RegionEditor({ asset, region, onChange }: RegionEditorProps) {
+export function RegionEditor({
+  asset,
+  region,
+  onChange,
+  automaticDetection = false,
+}: RegionEditorProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const interactionRef = useRef<Interaction | null>(null);
   const [editing, setEditing] = useState(false);
   const pixels = regionToPixels(region, asset.width, asset.height);
   const stageMaxWidth = `${(72 * asset.width) / asset.height}vh`;
+
+  useEffect(() => {
+    if (!automaticDetection) return;
+    interactionRef.current = null;
+    setEditing(false);
+  }, [automaticDetection]);
 
   const updateFromPointer = (event: PointerEvent<HTMLDivElement>) => {
     const interaction = interactionRef.current;
@@ -73,13 +85,21 @@ export function RegionEditor({ asset, region, onChange }: RegionEditorProps) {
           <h2 id="region-heading">选择水印区域</h2>
         </div>
         <div className="region-panel__actions">
-          <button className="button button--ghost" type="button" onClick={() => onChange(DEFAULT_REGION)}>
+          <button
+            className="button button--ghost"
+            type="button"
+            disabled={automaticDetection}
+            title={automaticDetection ? "VEO 模式不使用手动选区" : undefined}
+            onClick={() => onChange(DEFAULT_REGION)}
+          >
             <RotateCcw size={15} /> 恢复默认
           </button>
           <button
             className={`button ${editing ? "button--active" : "button--ghost"}`}
             type="button"
             aria-pressed={editing}
+            disabled={automaticDetection}
+            title={automaticDetection ? "VEO 将自动识别固定水印区域" : undefined}
             onClick={() => setEditing((value) => !value)}
           >
             <Crosshair size={16} /> {editing ? "完成微调" : "微调区域"}
@@ -89,7 +109,7 @@ export function RegionEditor({ asset, region, onChange }: RegionEditorProps) {
 
       <div
         ref={stageRef}
-        className={`region-stage ${editing ? "is-editing" : ""}`}
+        className={`region-stage ${editing ? "is-editing" : ""} ${automaticDetection ? "is-automatic" : ""}`}
         style={{
           aspectRatio: `${asset.width} / ${asset.height}`,
           maxWidth: stageMaxWidth,
@@ -97,43 +117,60 @@ export function RegionEditor({ asset, region, onChange }: RegionEditorProps) {
       >
         <video src={asset.url} controls={!editing} playsInline preload="metadata" />
         <div className="region-stage__shade" aria-hidden="true" />
-        <div
-          className="region-box"
-          role="application"
-          tabIndex={editing ? 0 : -1}
-          aria-label="水印选区。方向键移动，按住 Shift 和方向键缩放。"
-          style={{
-            left: `${region.x * 100}%`,
-            top: `${region.y * 100}%`,
-            width: `${region.width * 100}%`,
-            height: `${region.height * 100}%`,
-          }}
-          onKeyDown={handleKeyboard}
-          onPointerDown={(event) => beginInteraction(event, "move")}
-          onPointerMove={updateFromPointer}
-          onPointerUp={endInteraction}
-          onPointerCancel={endInteraction}
-        >
-          <span className="region-box__tag">REMOVE</span>
-          <Move className="region-box__move" size={18} aria-hidden="true" />
+        {automaticDetection ? (
+          <div className="region-stage__automatic" aria-hidden="true">
+            <ScanSearch size={17} />
+            <span>VEO AUTO DETECTION</span>
+          </div>
+        ) : (
           <div
-            className="region-box__handle"
-            aria-hidden="true"
-            onPointerDown={(event) => beginInteraction(event, "resize")}
+            className="region-box"
+            role="application"
+            tabIndex={editing ? 0 : -1}
+            aria-label="水印选区。方向键移动，按住 Shift 和方向键缩放。"
+            style={{
+              left: `${region.x * 100}%`,
+              top: `${region.y * 100}%`,
+              width: `${region.width * 100}%`,
+              height: `${region.height * 100}%`,
+            }}
+            onKeyDown={handleKeyboard}
+            onPointerDown={(event) => beginInteraction(event, "move")}
             onPointerMove={updateFromPointer}
             onPointerUp={endInteraction}
             onPointerCancel={endInteraction}
-          />
-        </div>
+          >
+            <span className="region-box__tag">REMOVE</span>
+            <Move className="region-box__move" size={18} aria-hidden="true" />
+            <div
+              className="region-box__handle"
+              aria-hidden="true"
+              onPointerDown={(event) => beginInteraction(event, "resize")}
+              onPointerMove={updateFromPointer}
+              onPointerUp={endInteraction}
+              onPointerCancel={endInteraction}
+            />
+          </div>
+        )}
       </div>
 
-      <div className="region-readout">
-        <div><span>起点 X</span><strong>{pixels.x}px</strong></div>
-        <div><span>起点 Y</span><strong>{pixels.y}px</strong></div>
-        <div><span>宽度</span><strong>{pixels.width}px</strong></div>
-        <div><span>高度</span><strong>{pixels.height}px</strong></div>
-        <p>{editing ? "拖动选框调整位置，右下角控制点调整大小。" : "默认区域已按样例定位，可直接进入修复。"}</p>
-      </div>
+      {automaticDetection ? (
+        <div className="region-auto-note" role="status">
+          <ScanSearch size={19} />
+          <div>
+            <strong>VEO 将自动识别固定水印区域</strong>
+            <p>当前模式不使用手动选区；切回浏览器模式或本地加速模式后，可继续调整并使用已保存的选区。</p>
+          </div>
+        </div>
+      ) : (
+        <div className="region-readout">
+          <div><span>起点 X</span><strong>{pixels.x}px</strong></div>
+          <div><span>起点 Y</span><strong>{pixels.y}px</strong></div>
+          <div><span>宽度</span><strong>{pixels.width}px</strong></div>
+          <div><span>高度</span><strong>{pixels.height}px</strong></div>
+          <p>{editing ? "拖动选框调整位置，右下角控制点调整大小。" : "默认区域已按样例定位，可直接进入修复。"}</p>
+        </div>
+      )}
     </div>
   );
 }
