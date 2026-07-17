@@ -25,7 +25,6 @@ export interface SidecarHealth {
 }
 
 export interface VeoCliSelectionStatus {
-  path: string;
   fileName: string;
   sizeBytes: number;
   sha256: string;
@@ -53,6 +52,7 @@ interface SidecarJob {
     cliVersion?: string;
     cliSha256?: string;
     cliElapsedMs?: number;
+    cliFramesPerSecond?: number;
     mediaIntegrityPassed?: boolean;
     bitrateWithinTolerance?: boolean;
     mediaIntegrity?: VeoProcessingDetails["mediaIntegrity"];
@@ -159,6 +159,7 @@ async function processRemoteJob(
   options: {
     endpoint: "/v1/jobs" | "/v1/veo/jobs";
     region?: NormalizedRegion;
+    veoForceAllFrames?: boolean;
     uploadingMessage: string;
     completedMessage: string;
   },
@@ -172,6 +173,9 @@ async function processRemoteJob(
     "X-Clearframe-Filename": file.name.replace(/[^a-zA-Z0-9._-]/g, "_"),
   };
   if (options.region) requestHeaders["X-Clearframe-Region"] = JSON.stringify(options.region);
+  if (options.endpoint === "/v1/veo/jobs") {
+    requestHeaders["X-Clearframe-Veo-Force"] = options.veoForceAllFrames ? "1" : "0";
+  }
   const createResponse = await fetch(`${baseUrl}${options.endpoint}`, {
     method: "POST",
     headers: requestHeaders,
@@ -243,11 +247,13 @@ export async function processVideoWithVeoSidecar(
   connection: SidecarConnection,
   onProgress: (progress: number, message: string) => void,
   signal: AbortSignal,
+  options: { forceAllFrames?: boolean } = {},
 ): Promise<{ blob: Blob; outputName: string; details: VeoProcessingDetails }> {
   const { blob, job } = await processRemoteJob(file, connection, {
     endpoint: "/v1/veo/jobs",
     uploadingMessage: "正在把视频交给本机 VEO 实验服务…",
     completedMessage: "VEO 实验处理完成",
+    veoForceAllFrames: options.forceAllFrames,
   }, onProgress, signal);
   const result = job.result;
   if (!result?.cliVersion || !result.cliSha256 || !result.mediaIntegrity
@@ -261,6 +267,7 @@ export async function processVideoWithVeoSidecar(
       cliVersion: result.cliVersion,
       cliSha256: result.cliSha256,
       cliElapsedMs: result.cliElapsedMs ?? 0,
+      cliFramesPerSecond: result.cliFramesPerSecond,
       mediaIntegrityPassed: result.mediaIntegrityPassed,
       bitrateWithinTolerance: result.bitrateWithinTolerance,
       bitrateDelta: result.verification?.bitrateDelta ?? 0,

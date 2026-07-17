@@ -69,8 +69,8 @@ export function ResultPanel({ asset, result, autoScroll = true, onReprocess }: R
         <div className="veo-verification" aria-label="VEO 媒体验收结果">
           <div className={result.veo.mediaIntegrityPassed ? "is-pass" : "is-fail"}>
             {result.veo.mediaIntegrityPassed ? <CircleCheck size={17} /> : <CircleAlert size={17} />}
-            <span><small>媒体完整性</small><strong>{result.veo.mediaIntegrityPassed ? "通过" : "未通过"}</strong></span>
-            <p>处理视频轨 → 最终视频轨：{result.veo.mediaIntegrity.videoBitstreamEqual ? "SHA 相同" : "SHA 不同"}<br />原片音频轨 → 最终音频轨：{result.veo.mediaIntegrity.audioBitstreamEqual ? "SHA 相同" : "SHA 不同"}</p>
+            <span><small>轨道封装完整性</small><strong>{result.veo.mediaIntegrityPassed ? "通过" : "未通过"}</strong></span>
+            <p>CLI 视频轨 → 最终视频轨：{result.veo.mediaIntegrity.videoBitstreamEqual ? "SHA 相同" : "SHA 不同"}<br />原片音频轨 → 最终音频轨：{result.veo.mediaIntegrity.audioBitstreamEqual ? "SHA 相同" : "SHA 不同"}<br />不代表水印视觉效果已通过检查。</p>
           </div>
           <div className={result.veo.bitrateWithinTolerance ? "is-pass" : "is-warn"}>
             {result.veo.bitrateWithinTolerance ? <CircleCheck size={17} /> : <CircleAlert size={17} />}
@@ -79,7 +79,7 @@ export function ResultPanel({ asset, result, autoScroll = true, onReprocess }: R
           </div>
           <div className="veo-verification__runtime">
             <small>VEO CLI</small>
-            <strong>{result.veo.cliVersion} · {(result.veo.cliElapsedMs / 1000).toFixed(1)}s</strong>
+            <strong>{result.veo.cliVersion} · {(result.veo.cliElapsedMs / 1000).toFixed(1)}s{result.veo.cliFramesPerSecond ? ` · ${result.veo.cliFramesPerSecond.toFixed(1)} fps` : ""}</strong>
             <code title={result.veo.cliSha256}>{result.veo.cliSha256.slice(0, 16)}…</code>
           </div>
         </div>

@@ -19,6 +19,8 @@ interface ProcessingModeControlProps {
   veoCliStatus?: VeoCliStatus | null;
   veoSelecting?: boolean;
   veoSelectionError?: string;
+  veoForceAllFrames?: boolean;
+  onVeoForceAllFramesChange?: (value: boolean) => void;
   onSelectVeoCli?: () => void;
   onUseDelogo?: () => void;
 }
@@ -44,6 +46,8 @@ export function ProcessingModeControl({
   veoCliStatus = null,
   veoSelecting = false,
   veoSelectionError = "",
+  veoForceAllFrames = false,
+  onVeoForceAllFramesChange = () => undefined,
   onSelectVeoCli = () => undefined,
   onUseDelogo = () => undefined,
 }: ProcessingModeControlProps) {
@@ -141,7 +145,9 @@ export function ProcessingModeControl({
           status={veoCliStatus}
           selecting={veoSelecting}
           selectionError={veoSelectionError}
+          forceAllFrames={veoForceAllFrames}
           disabled={disabled}
+          onForceAllFramesChange={onVeoForceAllFramesChange}
           onSelect={onSelectVeoCli}
           onUseDelogo={onUseDelogo}
         />

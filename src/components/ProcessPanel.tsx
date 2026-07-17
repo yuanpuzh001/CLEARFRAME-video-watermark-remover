@@ -27,6 +27,8 @@ interface ProcessPanelProps {
   veoCliStatus?: VeoCliStatus | null;
   veoSelecting?: boolean;
   veoSelectionError?: string;
+  veoForceAllFrames?: boolean;
+  onVeoForceAllFramesChange?: (value: boolean) => void;
   onSelectVeoCli?: () => void;
   onUseDelogo?: () => void;
 }
@@ -53,6 +55,8 @@ export function ProcessPanel({
   veoCliStatus = null,
   veoSelecting = false,
   veoSelectionError = "",
+  veoForceAllFrames = false,
+  onVeoForceAllFramesChange = () => undefined,
   onSelectVeoCli = () => undefined,
   onUseDelogo = () => undefined,
 }: ProcessPanelProps) {
@@ -66,7 +70,7 @@ export function ProcessPanel({
     ? "下载全部视频"
     : `下载已完成 ${completed} 个`;
   const progress = Math.round(state.progress * 100);
-  const estimatedProgress = mode === "veo" && busy && progress >= 5 && progress < 84;
+  const estimatedProgress = mode === "veo" && busy && state.message.includes("预计") && progress >= 5 && progress < 84;
   const nativeUnavailable = mode === "native" && sidecarState !== "ready";
   const veoUnavailable = mode === "veo" && (sidecarState !== "ready" || !veoCliStatus?.selection?.valid);
 
@@ -111,6 +115,8 @@ export function ProcessPanel({
         veoCliStatus={veoCliStatus}
         veoSelecting={veoSelecting}
         veoSelectionError={veoSelectionError}
+        veoForceAllFrames={veoForceAllFrames}
+        onVeoForceAllFramesChange={onVeoForceAllFramesChange}
         onSelectVeoCli={onSelectVeoCli}
         onUseDelogo={onUseDelogo}
       />

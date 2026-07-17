@@ -98,6 +98,9 @@ describe("sidecar browser client", () => {
       new AbortController().signal,
     );
     expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:3210/v1/veo/jobs");
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({
+      headers: expect.objectContaining({ "X-Clearframe-Veo-Force": "0" }),
+    });
     expect(result.outputName).toBe("sample-veo-clean.mp4");
     expect(result.details.mediaIntegrityPassed).toBe(true);
     expect(result.details.bitrateWithinTolerance).toBe(false);

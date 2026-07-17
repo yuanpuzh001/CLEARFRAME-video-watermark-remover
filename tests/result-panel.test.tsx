@@ -106,7 +106,8 @@ describe("ResultPanel download URL", () => {
     );
 
     const verification = screen.getByLabelText("VEO 媒体验收结果");
-    expect(verification).toHaveTextContent("媒体完整性通过");
+    expect(verification).toHaveTextContent("轨道封装完整性通过");
+    expect(verification).toHaveTextContent("不代表水印视觉效果已通过检查");
     expect(verification).toHaveTextContent("视频码率容差超出 · -27.86%");
     expect(verification).toHaveTextContent("SHA 相同");
   });

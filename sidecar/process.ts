@@ -11,6 +11,8 @@ export interface CommandResult {
 export interface RunCommandOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  onStdout?: (chunk: string) => void;
+  onStderr?: (chunk: string) => void;
 }
 
 export type CommandRunner = (
@@ -34,8 +36,14 @@ export const runCommand: CommandRunner = (command, args, options = {}) => new Pr
 
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
-  child.stdout.on("data", (chunk: string) => { stdout += chunk; });
-  child.stderr.on("data", (chunk: string) => { stderr += chunk; });
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+    options.onStdout?.(chunk);
+  });
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+    options.onStderr?.(chunk);
+  });
   child.on("error", (error) => {
     if (timer) clearTimeout(timer);
     reject(error);

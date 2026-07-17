@@ -7,7 +7,7 @@ import type { SidecarConfig } from "../sidecar/config";
 import { analyzeProbe, type MediaAnalysis, type MediaProbe } from "../sidecar/media";
 import type { CommandRunner } from "../sidecar/process";
 import type { VerificationReport } from "../sidecar/verify";
-import { buildVeoRemuxArgs, estimateVeoCliProgress, runVeoJob } from "../sidecar/veo-job";
+import { buildVeoCliArgs, buildVeoRemuxArgs, estimateVeoCliProgress, parseVeoCliProgress, runVeoJob } from "../sidecar/veo-job";
 
 const files: string[] = [];
 const directories: string[] = [];
@@ -48,6 +48,18 @@ describe("VEO media-quality chain", () => {
     expect(halfway.message).toContain("已耗时 01:12");
     expect(overdue.progress).toBe(0.8);
     expect(overdue.message).toContain("预计 80%");
+  });
+
+  it("parses real frame progress when the external CLI exposes it", () => {
+    expect(parseVeoCliProgress("[Veo 96x96 103/240 frames x1.00]")).toBeCloseTo(103 / 240, 4);
+    expect(parseVeoCliProgress("[################] 65% (94/144)")).toBeCloseTo(94 / 144, 4);
+    expect(parseVeoCliProgress("Video processing progress: 67.5%")).toBeCloseTo(0.675, 4);
+    expect(parseVeoCliProgress("ordinary diagnostic output")).toBeUndefined();
+  });
+
+  it("adds only the reviewed force flag for fixed-watermark occlusion handling", () => {
+    expect(buildVeoCliArgs({ inputPath: "in.mp4", outputPath: "out.mp4", forceAllFrames: true }))
+      .toEqual(["--veo", "--no-banner", "--force", "-i", "in.mp4", "-o", "out.mp4"]);
   });
 
   it("builds a stream-copy-only finalization command from processed video and original media", () => {
@@ -129,7 +141,7 @@ describe("VEO media-quality chain", () => {
 
     expect(calls[0]).toEqual({
       command: "/trusted/fake-veo",
-      args: ["-i", inputPath, "-o", intermediatePath],
+      args: ["--veo", "--no-banner", "-i", inputPath, "-o", intermediatePath],
     });
     expect(result.mediaIntegrityPassed).toBe(true);
     expect(result.bitrateWithinTolerance).toBe(false);
