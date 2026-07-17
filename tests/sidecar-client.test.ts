@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkSidecar, getVeoCliStatus, pairSidecar, processVideoWithSidecar, processVideoWithVeoSidecar, selectVeoCli } from "../src/lib/sidecar/client";
+import {
+  checkSidecar,
+  getVeoCliStatus,
+  pairSidecar,
+  processVideoWithSidecar,
+  processVideoWithVeoSidecar,
+  selectVeoCli,
+  setSidecarConcurrency,
+} from "../src/lib/sidecar/client";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -65,6 +73,28 @@ describe("sidecar browser client", () => {
     expect(fetchMock.mock.calls[1][0]).toBe("http://127.0.0.1:3210/v1/veo/cli/select");
     expect(fetchMock.mock.calls[1][1]).toMatchObject({ method: "POST" });
     expect(fetchMock.mock.calls[1][1]).not.toHaveProperty("body");
+  });
+
+  it("configures the bounded sidecar queue with an idempotent request", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      concurrency: 4,
+      active: 1,
+      queued: 2,
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(setSidecarConcurrency(
+      { baseUrl: "http://127.0.0.1:3210" },
+      4,
+    )).resolves.toEqual({ concurrency: 4, active: 1, queued: 2 });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:3210/v1/settings/concurrency",
+      expect.objectContaining({
+        method: "PUT",
+        credentials: "include",
+        body: JSON.stringify({ concurrency: 4 }),
+      }),
+    );
   });
 
   it("returns VEO media integrity separately from bitrate tolerance", async () => {

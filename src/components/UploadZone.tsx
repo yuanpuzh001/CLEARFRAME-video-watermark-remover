@@ -42,7 +42,7 @@ export function UploadZone({ disabled = false, onSelect }: UploadZoneProps) {
       </div>
       <p className="eyebrow">LOCAL INPUT / 01</p>
       <h2>一切数据和处理都基于您本地，<br />无任何泄漏风险</h2>
-      <p className="upload-zone__copy">拖放 MP4 到这里，或从电脑中选择。文件只停留在当前设备，并按队列顺序处理。</p>
+      <p className="upload-zone__copy">拖放 MP4 到这里，或从电脑中选择。文件只停留在当前设备，并按队列顺序调度。</p>
       <button
         className="button button--primary"
         type="button"
@@ -64,7 +64,7 @@ export function UploadZone({ disabled = false, onSelect }: UploadZoneProps) {
       <div className="upload-zone__limits">
         <span>单文件 ≤ 200MB</span>
         <span>时长 ≤ 5 分钟</span>
-        <span>顺序处理队列</span>
+        <span>并发 1 / 2 / 4</span>
         <span><ShieldCheck size={14} /> 本机处理</span>
       </div>
     </div>

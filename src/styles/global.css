@@ -182,6 +182,8 @@ main { padding: 76px 0 58px; }
 .asset-strip dd { margin: 0; font: 600 12px/1 "DIN Alternate", monospace; }
 
 .process-panel { display: grid; gap: 18px; padding: 26px; border: 1px solid var(--line); background: var(--panel); }
+.process-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.process-panel__head-main { min-width: 0; }
 .process-panel__status { min-width: 0; }
 .process-panel__status-line { margin-bottom: 11px; }
 .process-panel__status-line > div { display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 11px; }
@@ -191,6 +193,15 @@ main { padding: 76px 0 58px; }
 .process-panel__copy { display: flex; align-items: baseline; gap: 18px; }
 .process-panel__copy h2 { flex: 0 0 auto; margin: 0; font: 400 26px/1.1 "Songti SC", serif; }
 .process-panel__copy > p:last-child { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.concurrency-control { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px; color: var(--muted); border: 1px solid var(--line); background: rgba(3,5,4,.38); }
+.concurrency-control__label { display: inline-flex; align-items: center; gap: 6px; padding-left: 8px; font: 700 9px/1 "DIN Alternate", monospace; letter-spacing: .1em; white-space: nowrap; }
+.concurrency-control__options { display: grid; grid-template-columns: repeat(3, 30px); gap: 2px; }
+.concurrency-control__options button { height: 28px; padding: 0; color: var(--muted); border: 1px solid transparent; background: transparent; font: 700 10px/1 "DIN Alternate", monospace; cursor: pointer; transition: color .18s ease, border-color .18s ease, background .18s ease; }
+.concurrency-control__options button:hover:not(:disabled) { color: var(--paper); background: rgba(255,255,255,.05); }
+.concurrency-control__options button[aria-checked="true"] { color: var(--ink); border-color: var(--acid); background: var(--acid); box-shadow: 0 0 14px rgba(185,255,90,.14); }
+.concurrency-control__options button:disabled:not([aria-checked="true"]) { opacity: .34; cursor: not-allowed; }
+.concurrency-control__options button:disabled[aria-checked="true"] { cursor: default; }
+.concurrency-control.is-browser { border-color: rgba(185,255,90,.18); }
 .process-panel__meter { overflow: hidden; height: 5px; background: rgba(255,255,255,.09); }
 .process-panel__meter span { display: block; height: 100%; background: var(--acid); box-shadow: 0 0 16px rgba(185,255,90,.6); transition: width .25s ease; }
 .process-panel__meter.is-estimated span { background-color: #d99835; background-image: linear-gradient(90deg, #d99835 0 35%, #ffca7a 50%, #d99835 65% 100%); background-size: 44px 100%; box-shadow: 0 0 16px rgba(255,183,77,.42); }
@@ -312,6 +323,9 @@ footer { min-height: 72px; display: flex; justify-content: space-between; align-
   .batch-queue__head { align-items: flex-start; }
   .batch-queue__list { grid-template-columns: 1fr; }
   .process-panel { gap: 18px; padding: 20px; }
+  .process-panel__head { flex-direction: column; gap: 14px; }
+  .concurrency-control { width: 100%; }
+  .concurrency-control__options { margin-left: auto; }
   .process-panel__copy { align-items: flex-start; flex-direction: column; gap: 7px; }
   .mode-control__options, .mode-control__fields, .veo-mode__toolbar { grid-template-columns: 1fr; }
   .veo-mode__select { width: 100%; }

@@ -6,6 +6,7 @@ import { basename, join } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { isQueueConcurrency, type QueueConcurrency } from "../src/lib/video/concurrency";
 import type { NormalizedRegion } from "../src/types/video";
 import type { NativeCapabilities } from "./capabilities";
 import type { SidecarConfig } from "./config";
@@ -95,6 +96,19 @@ function sendJson(response: ServerResponse, status: number, body: unknown): void
   response.end(JSON.stringify(body));
 }
 
+async function readJsonBody(request: IncomingMessage, maxBytes = 1024): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > maxBytes) throw new Error("请求内容过大");
+    chunks.push(buffer);
+  }
+  if (size === 0) throw new Error("缺少请求内容");
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
 function publicJob(job: SidecarJob): Record<string, unknown> {
   const result = job.result;
   return {
@@ -172,6 +186,9 @@ export async function createSidecarServer(options: {
   const jobRetentionMs = options.jobRetentionMs ?? 30 * 60 * 1000;
   let veoEstimatedFps = capabilities.platform === "win32" && capabilities.gpuName ? 12 : 1;
   let veoSelection: VeoCliSelection | undefined;
+  let concurrencyLimit: QueueConcurrency = 1;
+  let activeJobCount = 0;
+  const queuedJobIds: string[] = [];
 
   const cleanupJob = async (job: SidecarJob) => {
     if (job.cleanupPromise) return job.cleanupPromise;
@@ -251,6 +268,39 @@ export async function createSidecarServer(options: {
     }
   };
 
+  const queueStatus = () => ({
+    concurrency: concurrencyLimit,
+    active: activeJobCount,
+    queued: queuedJobIds.reduce((count, id) => {
+      const job = jobs.get(id);
+      return count + (job?.phase === "queued" ? 1 : 0);
+    }, 0),
+  });
+
+  const removeQueuedJob = (id: string) => {
+    const index = queuedJobIds.indexOf(id);
+    if (index >= 0) queuedJobIds.splice(index, 1);
+  };
+
+  const drainQueue = () => {
+    while (activeJobCount < concurrencyLimit) {
+      const id = queuedJobIds.shift();
+      if (!id) return;
+      const job = jobs.get(id);
+      if (!job || job.phase !== "queued" || job.controller.signal.aborted) continue;
+      activeJobCount += 1;
+      void runJob(job).finally(() => {
+        activeJobCount -= 1;
+        drainQueue();
+      });
+    }
+  };
+
+  const enqueueJob = (job: SidecarJob) => {
+    queuedJobIds.push(job.id);
+    drainQueue();
+  };
+
   const server = createServer(async (request, response) => {
     try {
       applyHeaders(response, request, config);
@@ -258,7 +308,7 @@ export async function createSidecarServer(options: {
     const url = new URL(request.url ?? "/", `http://${config.host}:${config.port}`);
     if (request.method === "OPTIONS") {
       response.statusCode = 204;
-      response.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+      response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
       response.setHeader("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Clearframe-Filename,X-Clearframe-Region,X-Clearframe-Veo-Force");
       return response.end();
     }
@@ -305,7 +355,21 @@ export async function createSidecarServer(options: {
         host: config.host,
         bitrateTolerance: config.bitrateTolerance,
         capabilities,
+        queue: queueStatus(),
       });
+    }
+    if (request.method === "PUT" && url.pathname === "/v1/settings/concurrency") {
+      try {
+        const body = await readJsonBody(request) as { concurrency?: unknown };
+        if (!body || typeof body !== "object" || !isQueueConcurrency(body.concurrency)) {
+          return sendJson(response, 400, { error: "并发数仅支持 1、2 或 4" });
+        }
+        concurrencyLimit = body.concurrency;
+        drainQueue();
+        return sendJson(response, 200, queueStatus());
+      } catch (error) {
+        return sendJson(response, 400, { error: error instanceof Error ? error.message : "并发设置无效" });
+      }
     }
     if (request.method === "GET" && url.pathname === "/v1/veo/cli") {
       return sendJson(response, 200, {
@@ -388,7 +452,7 @@ export async function createSidecarServer(options: {
       job.phase = "queued";
       job.progress = 0.01;
       job.message = "等待本地处理…";
-      void runJob(job);
+      enqueueJob(job);
       return sendJson(response, 202, publicJob(job));
     }
     const match = url.pathname.match(/^\/v1\/jobs\/([0-9a-f-]+)(\/output)?$/i);
@@ -407,7 +471,14 @@ export async function createSidecarServer(options: {
       if (request.method === "GET" && !match[2]) return sendJson(response, 200, publicJob(job));
       if (request.method === "DELETE" && !match[2]) {
         job.deleteRequested = true;
-        if (job.phase === "processing" || job.phase === "verifying" || job.phase === "queued" || job.phase === "uploading") {
+        if (job.phase === "queued") {
+          removeQueuedJob(job.id);
+          job.controller.abort();
+          job.phase = "cancelled";
+          job.message = "处理已取消";
+          await cleanupJob(job);
+          drainQueue();
+        } else if (job.phase === "processing" || job.phase === "verifying" || job.phase === "uploading") {
           job.controller.abort();
           job.phase = "cancelled";
           job.message = "正在取消处理…";
@@ -432,6 +503,7 @@ export async function createSidecarServer(options: {
       job.controller.abort();
       await cleanupJob(job);
     }
+    queuedJobIds.length = 0;
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     pairing.clear();
     try { await rmdir(tempRoot); } catch { /* leave only if an active process has not exited */ }

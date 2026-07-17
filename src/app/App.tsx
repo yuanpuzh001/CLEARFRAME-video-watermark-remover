@@ -11,6 +11,7 @@ import { useBatchVideoProcessor, type ProcessingMode } from "../hooks/useBatchVi
 import { useRefreshGuard } from "../hooks/useRefreshGuard";
 import { checkSidecar, getVeoCliStatus, pairSidecar, selectVeoCli, type SidecarHealth, type VeoCliStatus } from "../lib/sidecar/client";
 import { WORKFLOW_SECTIONS } from "../lib/ui/workflowLabels";
+import type { QueueConcurrency } from "../lib/video/concurrency";
 import { DEFAULT_REGION } from "../lib/video/region";
 import { createResultArchive, downloadBlob } from "../lib/video/resultArchive";
 import { cleanOutputName, loadVideoAssets } from "../lib/video/validation";
@@ -23,6 +24,7 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [processingMode, setProcessingMode] = useState<ProcessingMode>("browser");
+  const [concurrency, setConcurrency] = useState<QueueConcurrency>(1);
   const [sidecarUrl, setSidecarUrl] = useState("http://127.0.0.1:3210");
   const [sidecarState, setSidecarState] = useState<SidecarConnectionState>("idle");
   const [sidecarMessage, setSidecarMessage] = useState("启动 sidecar 后进行配对");
@@ -39,6 +41,7 @@ export function App() {
   const processor = useBatchVideoProcessor({
     mode: processingMode,
     sidecar: sidecarConnection,
+    concurrency,
     veoForceAllFrames,
   });
   useRefreshGuard(items.length > 0);
@@ -279,6 +282,7 @@ export function App() {
               sidecarState={sidecarState}
               sidecarMessage={sidecarMessage}
               sidecarHealth={sidecarHealth}
+              concurrency={processingMode === "browser" ? 1 : concurrency}
               onProcess={() => void processor.run(items)}
               onCancel={processor.cancel}
               onClearQueue={handleReset}
@@ -289,6 +293,7 @@ export function App() {
                 resetSidecarConnection("地址已更改，请重新连接");
               }}
               onConnectSidecar={() => void handleConnectSidecar()}
+              onConcurrencyChange={setConcurrency}
               veoCliStatus={veoCliStatus}
               veoSelecting={veoSelecting}
               veoSelectionError={veoSelectionError}

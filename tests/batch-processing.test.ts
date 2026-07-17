@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runSequentialVideoQueue, type QueueItemProcessor } from "../src/lib/video/batchQueue";
+import { runBoundedVideoQueue, runSequentialVideoQueue, type QueueItemProcessor } from "../src/lib/video/batchQueue";
 import type { VideoQueueItem } from "../src/types/video";
 
 function makeItem(id: string): VideoQueueItem {
@@ -63,5 +63,68 @@ describe("runSequentialVideoQueue", () => {
     );
 
     expect(cancelled).toEqual([["one", "two"]]);
+  });
+});
+
+describe("runBoundedVideoQueue", () => {
+  it("never exceeds the selected concurrency and continues after failures", async () => {
+    let active = 0;
+    let peak = 0;
+    const successes: string[] = [];
+    const errors: string[] = [];
+    const processItem: QueueItemProcessor = async (file) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 8));
+      active -= 1;
+      if (file.name === "two.mp4") throw new Error("bad video");
+      return { blob: new Blob([file.name]), mode: "native", outputName: `${file.name}-clean.mp4` };
+    };
+
+    await runBoundedVideoQueue(
+      [makeItem("one"), makeItem("two"), makeItem("three"), makeItem("four")],
+      processItem,
+      {
+        onStart: () => undefined,
+        onProgress: () => undefined,
+        onSuccess: (item) => successes.push(item.id),
+        onError: (item) => errors.push(item.id),
+        onCancelled: () => undefined,
+      },
+      new AbortController().signal,
+      2,
+    );
+
+    expect(peak).toBe(2);
+    expect(successes.sort()).toEqual(["four", "one", "three"]);
+    expect(errors).toEqual(["two"]);
+  });
+
+  it("reports active and pending items once when a parallel queue is cancelled", async () => {
+    const controller = new AbortController();
+    const cancelled: string[][] = [];
+    let started = 0;
+    const processItem: QueueItemProcessor = async () => {
+      started += 1;
+      if (started === 2) controller.abort();
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      throw new DOMException("Aborted", "AbortError");
+    };
+
+    await runBoundedVideoQueue(
+      [makeItem("one"), makeItem("two"), makeItem("three"), makeItem("four")],
+      processItem,
+      {
+        onStart: () => undefined,
+        onProgress: () => undefined,
+        onSuccess: () => undefined,
+        onError: () => undefined,
+        onCancelled: (items) => cancelled.push(items.map(({ id }) => id)),
+      },
+      controller.signal,
+      2,
+    );
+
+    expect(cancelled).toEqual([["one", "two", "three", "four"]]);
   });
 });

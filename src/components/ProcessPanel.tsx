@@ -2,7 +2,9 @@ import { CircleStop, Download, Sparkles, Trash2, TriangleAlert } from "lucide-re
 import type { ProcessingMode } from "../hooks/useBatchVideoProcessor";
 import type { SidecarHealth, VeoCliStatus } from "../lib/sidecar/client";
 import { WORKFLOW_LABELS, WORKFLOW_SECTIONS } from "../lib/ui/workflowLabels";
+import type { QueueConcurrency } from "../lib/video/concurrency";
 import type { ProcessingState } from "../types/video";
+import { ConcurrencyControl } from "./ConcurrencyControl";
 import { ProcessingModeControl, type SidecarConnectionState } from "./ProcessingModeControl";
 
 interface ProcessPanelProps {
@@ -17,6 +19,7 @@ interface ProcessPanelProps {
   sidecarState: SidecarConnectionState;
   sidecarMessage: string;
   sidecarHealth: SidecarHealth | null;
+  concurrency?: QueueConcurrency;
   onProcess: () => void;
   onCancel: () => void;
   onClearQueue: () => void;
@@ -24,6 +27,7 @@ interface ProcessPanelProps {
   onModeChange: (mode: ProcessingMode) => void;
   onSidecarUrlChange: (value: string) => void;
   onConnectSidecar: () => void;
+  onConcurrencyChange?: (value: QueueConcurrency) => void;
   veoCliStatus?: VeoCliStatus | null;
   veoSelecting?: boolean;
   veoSelectionError?: string;
@@ -44,6 +48,7 @@ export function ProcessPanel({
   sidecarState,
   sidecarMessage,
   sidecarHealth,
+  concurrency = 1,
   onProcess,
   onCancel,
   onClearQueue,
@@ -51,6 +56,7 @@ export function ProcessPanel({
   onModeChange,
   onSidecarUrlChange,
   onConnectSidecar,
+  onConcurrencyChange = () => undefined,
   veoCliStatus = null,
   veoSelecting = false,
   veoSelectionError = "",
@@ -75,11 +81,19 @@ export function ProcessPanel({
   return (
     <section id={WORKFLOW_SECTIONS.process.id} className="process-panel" aria-labelledby="process-heading">
       <div className="process-panel__head">
-        <p className="eyebrow">{WORKFLOW_LABELS.process}</p>
-        <div className="process-panel__copy">
-          <h2 id="process-heading">{total > 1 ? "批量去水印" : "一键去水印"}</h2>
-          <p>视频会逐个处理以控制内存占用；每项使用各自的选区，全程不上传服务器。</p>
+        <div className="process-panel__head-main">
+          <p className="eyebrow">{WORKFLOW_LABELS.process}</p>
+          <div className="process-panel__copy">
+            <h2 id="process-heading">{total > 1 ? "批量去水印" : "一键去水印"}</h2>
+            <p>任务按设定并发数处理；所有媒体留在当前设备。</p>
+          </div>
         </div>
+        <ConcurrencyControl
+          value={concurrency}
+          mode={mode}
+          disabled={busy}
+          onChange={onConcurrencyChange}
+        />
       </div>
 
       <div className="process-panel__status" aria-live="polite">

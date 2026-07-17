@@ -1,5 +1,6 @@
 import type { NormalizedRegion } from "../../types/video";
 import type { VeoProcessingDetails } from "../../types/video";
+import type { QueueConcurrency } from "../video/concurrency";
 
 export interface SidecarConnection {
   baseUrl: string;
@@ -22,6 +23,13 @@ export interface SidecarHealth {
     gpuName?: string;
     selected: Partial<Record<"h264" | "hevc", string>>;
   };
+  queue: SidecarQueueStatus;
+}
+
+export interface SidecarQueueStatus {
+  concurrency: QueueConcurrency;
+  active: number;
+  queued: number;
 }
 
 export interface VeoCliSelectionStatus {
@@ -119,6 +127,19 @@ export async function checkSidecar(
   });
   if (!response.ok) throw await responseError(response);
   return response.json() as Promise<SidecarHealth>;
+}
+
+export function setSidecarConcurrency(
+  connection: SidecarConnection,
+  concurrency: QueueConcurrency,
+  signal?: AbortSignal,
+): Promise<SidecarQueueStatus> {
+  return requestJson(connection, "/v1/settings/concurrency", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ concurrency }),
+    signal,
+  });
 }
 
 export async function pairSidecar(

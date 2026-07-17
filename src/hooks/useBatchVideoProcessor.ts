@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { processVideo, terminateVideoEngine } from "../lib/ffmpeg/processor";
-import { processVideoWithSidecar, processVideoWithVeoSidecar, type SidecarConnection } from "../lib/sidecar/client";
-import { runSequentialVideoQueue } from "../lib/video/batchQueue";
+import {
+  processVideoWithSidecar,
+  processVideoWithVeoSidecar,
+  setSidecarConcurrency,
+  type SidecarConnection,
+} from "../lib/sidecar/client";
+import { runBoundedVideoQueue } from "../lib/video/batchQueue";
+import type { QueueConcurrency } from "../lib/video/concurrency";
 import type { BatchItemProcessingState, VideoQueueItem } from "../types/video";
 
 export type ProcessingMode = "browser" | "native" | "veo";
@@ -9,6 +15,7 @@ export type ProcessingMode = "browser" | "native" | "veo";
 interface BatchProcessorOptions {
   mode?: ProcessingMode;
   sidecar?: SidecarConnection;
+  concurrency?: QueueConcurrency;
   veoForceAllFrames?: boolean;
 }
 
@@ -22,7 +29,7 @@ const READY_STATE: BatchItemProcessingState = {
 function friendlyError(reason: unknown, mode: ProcessingMode): string {
   const message = reason instanceof Error ? reason.message : "未知错误";
   if (mode === "native") return `本地加速处理失败：${message}。可切换到浏览器模式继续处理。`;
-  if (mode === "veo") return `VEO 实验处理失败：${message}。如需改用 delogo，请手动切换处理模式。`;
+  if (mode === "veo") return `VEO 实验处理失败：${message}。请检查本地服务或切换处理模式后重试。`;
   if (/memory|allocation|out of bounds/i.test(message)) {
     return "浏览器可用内存不足，请关闭其他页面或换用更短的视频。";
   }
@@ -41,6 +48,7 @@ function progressPhase(mode: ProcessingMode, progress: number): BatchItemProcess
 export function useBatchVideoProcessor(options: BatchProcessorOptions = {}) {
   const mode = options.mode ?? "browser";
   const sidecar = options.sidecar;
+  const concurrency = mode === "browser" ? 1 : options.concurrency ?? 1;
   const [states, setStates] = useState<Record<string, BatchItemProcessingState>>({});
   const statesRef = useRef(states);
   const controllerRef = useRef<AbortController | null>(null);
@@ -81,6 +89,31 @@ export function useBatchVideoProcessor(options: BatchProcessorOptions = {}) {
       return next;
     });
 
+    if (mode !== "browser") {
+      try {
+        if (!sidecar) throw new Error("尚未连接本地 sidecar");
+        await setSidecarConcurrency(sidecar, concurrency, controller.signal);
+      } catch (reason) {
+        if (isCurrent()) {
+          replaceStates((current) => {
+            const next = { ...current };
+            for (const item of targets) {
+              next[item.id] = {
+                phase: "error",
+                progress: 0,
+                message: "任务池配置失败",
+                error: friendlyError(reason, mode),
+                result: null,
+              };
+            }
+            return next;
+          });
+        }
+        if (controllerRef.current === controller) controllerRef.current = null;
+        return;
+      }
+    }
+
     const processItem = mode === "native"
       ? (file: File, region: VideoQueueItem["region"], onProgress: (progress: number, message: string) => void, signal: AbortSignal) => {
           if (!sidecar) throw new Error("尚未连接本地 sidecar");
@@ -113,7 +146,7 @@ export function useBatchVideoProcessor(options: BatchProcessorOptions = {}) {
           outputName: file.name.replace(/\.mp4$/i, "-clean.mp4"),
         }));
 
-    await runSequentialVideoQueue(
+    await runBoundedVideoQueue(
       targets,
       processItem,
       {
@@ -167,10 +200,11 @@ export function useBatchVideoProcessor(options: BatchProcessorOptions = {}) {
         },
       },
       controller.signal,
+      concurrency,
     );
 
     if (controllerRef.current === controller) controllerRef.current = null;
-  }, [mode, options.veoForceAllFrames, replaceStates, sidecar, updateItem]);
+  }, [concurrency, mode, options.veoForceAllFrames, replaceStates, sidecar, updateItem]);
 
   const cancel = useCallback(() => controllerRef.current?.abort(), []);
 

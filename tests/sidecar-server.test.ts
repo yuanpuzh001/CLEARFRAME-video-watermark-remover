@@ -44,10 +44,16 @@ describe("sidecar HTTP security", () => {
       headers: { Authorization: "Bearer test-sidecar-token", Origin: "http://127.0.0.1:5173" },
     });
     expect(response.status).toBe(200);
-    const body = await response.json() as { ready: boolean; host: string; capabilities: NativeCapabilities };
+    const body = await response.json() as {
+      ready: boolean;
+      host: string;
+      capabilities: NativeCapabilities;
+      queue: { concurrency: number; active: number; queued: number };
+    };
     expect(body.ready).toBe(true);
     expect(body.host).toBe("127.0.0.1");
     expect(body.capabilities.selected.h264).toBe("libx264");
+    expect(body.queue).toEqual({ concurrency: 1, active: 0, queued: 0 });
   });
 
   it("establishes an origin-bound HttpOnly session after native approval", async () => {
@@ -178,6 +184,97 @@ describe("sidecar HTTP security", () => {
     expect(await output.text()).toBe("video");
     expect((await fetch(`${root}/v1/jobs/${createdJob.id}`, { method: "DELETE", headers })).status).toBe(202);
     expect((await fetch(`${root}/v1/jobs/${createdJob.id}`, { headers })).status).toBe(404);
+  });
+
+  it("schedules jobs centrally with a configurable bounded concurrency", async () => {
+    let active = 0;
+    let peak = 0;
+    const releases: Array<() => void> = [];
+    const app = await createSidecarServer({
+      config,
+      capabilities,
+      jobRunner: async ({ inputPath, outputPath }) => {
+        active += 1;
+        peak = Math.max(peak, active);
+        try {
+          await new Promise<void>((resolve) => releases.push(resolve));
+          await copyFile(inputPath, outputPath);
+          return {
+            plan: { encoder: "libx264", hardware: false },
+            encoderFallback: false,
+            bitrateAttempts: 1,
+            elapsedMs: 1,
+            realtimeFactor: 1,
+            verification: { valid: true },
+          } as unknown as NativeJobResult;
+        } finally {
+          active -= 1;
+        }
+      },
+    });
+    close = app.close;
+    await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+    const address = app.server.address() as AddressInfo;
+    const root = `http://127.0.0.1:${address.port}`;
+    const headers = {
+      Authorization: "Bearer test-sidecar-token",
+      Origin: "http://127.0.0.1:5173",
+    };
+
+    const configured = await fetch(`${root}/v1/settings/concurrency`, {
+      method: "PUT",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ concurrency: 2 }),
+    });
+    expect(configured.status).toBe(200);
+    expect(await configured.json()).toMatchObject({ concurrency: 2, active: 0, queued: 0 });
+    expect((await fetch(`${root}/v1/settings/concurrency`, {
+      method: "PUT",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ concurrency: 3 }),
+    })).status).toBe(400);
+
+    const jobIds: string[] = [];
+    for (let index = 0; index < 4; index += 1) {
+      const response = await fetch(`${root}/v1/jobs`, {
+        method: "POST",
+        headers: {
+          ...headers,
+          "Content-Type": "video/mp4",
+          "X-Clearframe-Filename": `sample-${index}.mp4`,
+          "X-Clearframe-Region": JSON.stringify({ x: 0.8, y: 0.8, width: 0.1, height: 0.1 }),
+        },
+        body: Buffer.from(`video-${index}`),
+      });
+      expect(response.status).toBe(202);
+      jobIds.push(((await response.json()) as { id: string }).id);
+    }
+
+    expect(releases).toHaveLength(2);
+    const queuedHealth = await (await fetch(`${root}/v1/health`, { headers })).json() as {
+      queue: { concurrency: number; active: number; queued: number };
+    };
+    expect(queuedHealth.queue).toEqual({ concurrency: 2, active: 2, queued: 2 });
+    expect(peak).toBe(2);
+
+    releases[0]();
+    releases[1]();
+    for (let attempt = 0; attempt < 20 && releases.length < 4; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 2));
+    }
+    expect(releases).toHaveLength(4);
+    releases[2]();
+    releases[3]();
+
+    for (const id of jobIds) {
+      let phase = "queued";
+      for (let attempt = 0; attempt < 20 && phase !== "success"; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 2));
+        phase = ((await (await fetch(`${root}/v1/jobs/${id}`, { headers })).json()) as { phase: string }).phase;
+      }
+      expect(phase).toBe("success");
+    }
+    expect(peak).toBe(2);
   });
 
   it("expires terminal jobs so abandoned browser results do not remain indefinitely", async () => {

@@ -213,4 +213,66 @@ describe("ProcessPanel", () => {
     );
     expect(within(container).getByRole("button", { name: "一键去水印" })).toBeEnabled();
   });
+
+  it("keeps browser processing on one task to protect browser memory", () => {
+    render(
+      <ProcessPanel
+        state={{ phase: "idle", progress: 0, message: "2 个视频等待处理" }}
+        total={2}
+        completed={0}
+        remaining={2}
+        downloadingAll={false}
+        mode="browser"
+        concurrency={4}
+        sidecarUrl="http://127.0.0.1:3210"
+        sidecarPairingCode=""
+        sidecarState="idle"
+        sidecarMessage="等待连接"
+        sidecarHealth={null}
+        onProcess={vi.fn()}
+        onCancel={vi.fn()}
+        onClearQueue={vi.fn()}
+        onDownloadAll={vi.fn()}
+        onModeChange={vi.fn()}
+        onSidecarUrlChange={vi.fn()}
+        onConnectSidecar={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("radio", { name: "并行 1 个任务" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "并行 2 个任务" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "并行 4 个任务" })).toBeDisabled();
+  });
+
+  it("lets sidecar modes select a bounded concurrency", () => {
+    const onConcurrencyChange = vi.fn();
+    render(
+      <ProcessPanel
+        state={{ phase: "idle", progress: 0, message: "4 个视频等待处理" }}
+        total={4}
+        completed={0}
+        remaining={4}
+        downloadingAll={false}
+        mode="native"
+        concurrency={2}
+        sidecarUrl="http://127.0.0.1:3210"
+        sidecarPairingCode=""
+        sidecarState="ready"
+        sidecarMessage="已连接"
+        sidecarHealth={null}
+        onProcess={vi.fn()}
+        onCancel={vi.fn()}
+        onClearQueue={vi.fn()}
+        onDownloadAll={vi.fn()}
+        onModeChange={vi.fn()}
+        onSidecarUrlChange={vi.fn()}
+        onConnectSidecar={vi.fn()}
+        onConcurrencyChange={onConcurrencyChange}
+      />,
+    );
+
+    expect(screen.getByRole("radio", { name: "并行 2 个任务" })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: "并行 4 个任务" }));
+    expect(onConcurrencyChange).toHaveBeenCalledWith(4);
+  });
 });
