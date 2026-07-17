@@ -1,4 +1,4 @@
-import { ExternalLink, FileCheck2, FlaskConical, FolderOpen, ShieldAlert, Undo2 } from "lucide-react";
+import { ExternalLink, FileCheck2, FlaskConical, FolderOpen } from "lucide-react";
 import type { VeoCliStatus } from "../lib/sidecar/client";
 import { formatBytes } from "../lib/video/validation";
 import type { SidecarConnectionState } from "./ProcessingModeControl";
@@ -14,7 +14,6 @@ interface VeoModePanelProps {
   disabled: boolean;
   onForceAllFramesChange: (value: boolean) => void;
   onSelect: () => void;
-  onUseDelogo: () => void;
 }
 
 export function VeoModePanel({
@@ -26,7 +25,6 @@ export function VeoModePanel({
   disabled,
   onForceAllFramesChange,
   onSelect,
-  onUseDelogo,
 }: VeoModePanelProps) {
   const selection = status?.selection;
   const offline = sidecarState !== "ready";
@@ -38,19 +36,15 @@ export function VeoModePanel({
 
   return (
     <div className="veo-mode" aria-label="VEO 实验模式设置">
-      <div className="veo-mode__masthead">
-        <span><FlaskConical size={15} /> VEO CLI / EXPERIMENTAL</span>
-        <a href={RELEASE_URL} target="_blank" rel="noreferrer">
-          下载 v0.6.4-demo <ExternalLink size={13} />
-        </a>
-      </div>
+      <div className="veo-mode__toolbar">
+        <div className="veo-mode__identity">
+          <FlaskConical size={16} />
+          <span>
+            <strong>VEO CLI</strong>
+            <small>第三方实验 · M4 ≈ 1 fps · 可能降码率或局部模糊</small>
+          </span>
+        </div>
 
-      <p className="veo-mode__notice">
-        <ShieldAlert size={14} />
-        第三方 CLI · M4 实测约 1 fps · 可能降码率或产生局部模糊 · 仅处理已获授权的视频
-      </p>
-
-      <div className="veo-mode__controls">
         <label className={`veo-force ${forceAllFrames ? "is-active" : ""}`}>
           <input
             type="checkbox"
@@ -60,39 +54,44 @@ export function VeoModePanel({
           />
           <span>
             <strong>遮挡帧处理</strong>
-            <small>减少跳帧，可能影响前景</small>
           </span>
         </label>
 
         <div className={`veo-cli ${selection?.valid ? "is-valid" : selection ? "is-invalid" : ""}`}>
-          <div className="veo-cli__head">
-            <div>
-              <FileCheck2 size={17} />
-              <span><strong>本机 CLI</strong><small>{selection?.valid ? "哈希校验通过" : selection ? "校验失败" : "尚未选择"}</small></span>
-            </div>
-            <button
-              className="button button--ghost"
-              type="button"
-              disabled={disabled || offline || selecting}
-              onClick={onSelect}
-            >
-              <FolderOpen size={15} /> {buttonLabel}
-            </button>
+          <FileCheck2 size={16} />
+          <div>
+            <strong>{selection?.fileName ?? "本机 CLI"}</strong>
+            <small>{selection?.valid ? "哈希校验通过" : selection ? "校验失败" : "尚未选择"}</small>
           </div>
-          {(selection?.error || selectionError) && (
-            <p className="veo-cli__error" role="alert">{selection?.error || selectionError}</p>
-          )}
-          {(offline || (selection && !selection.valid)) && (
-            <button className="veo-cli__fallback" type="button" disabled={disabled} onClick={onUseDelogo}>
-              <Undo2 size={13} /> 改用 delogo
-            </button>
-          )}
         </div>
+
+        <button
+          className="button button--ghost veo-mode__select"
+          type="button"
+          disabled={disabled || offline || selecting}
+          onClick={onSelect}
+        >
+          <FolderOpen size={15} /> {buttonLabel}
+        </button>
+
+        <a
+          className="veo-mode__release"
+          href={RELEASE_URL}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="下载 VEO CLI v0.6.4-demo"
+        >
+          v0.6.4 <ExternalLink size={12} />
+        </a>
       </div>
+
+      {(selection?.error || selectionError) && (
+        <p className="veo-cli__error" role="alert">{selection?.error || selectionError}</p>
+      )}
 
       {selection && (
         <details className="veo-cli__disclosure">
-          <summary>查看 CLI 校验信息</summary>
+          <summary>CLI 校验信息 · 仅处理已获授权的视频</summary>
           <dl className="veo-cli__details">
             <div><dt>文件</dt><dd>{selection.fileName}</dd></div>
             <div><dt>大小</dt><dd>{formatBytes(selection.sizeBytes)}</dd></div>

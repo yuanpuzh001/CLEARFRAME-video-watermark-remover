@@ -22,7 +22,6 @@ interface ProcessingModeControlProps {
   veoForceAllFrames?: boolean;
   onVeoForceAllFramesChange?: (value: boolean) => void;
   onSelectVeoCli?: () => void;
-  onUseDelogo?: () => void;
 }
 
 function nativeSummary(health: SidecarHealth | null): string {
@@ -49,8 +48,10 @@ export function ProcessingModeControl({
   veoForceAllFrames = false,
   onVeoForceAllFramesChange = () => undefined,
   onSelectVeoCli = () => undefined,
-  onUseDelogo = () => undefined,
 }: ProcessingModeControlProps) {
+  const nativeReady = connectionState === "ready";
+  const veoReady = nativeReady && veoCliStatus?.selection?.valid === true;
+
   return (
     <div className="mode-control" aria-label="处理模式">
       <div className="mode-control__options" role="radiogroup" aria-label="选择视频处理模式">
@@ -63,8 +64,8 @@ export function ProcessingModeControl({
           onClick={() => onModeChange("browser")}
         >
           <Cpu size={18} />
-          <span><strong>浏览器模式</strong><small>无需安装 · ffmpeg.wasm</small></span>
-          <i>FALLBACK</i>
+          <span><strong>浏览器模式</strong><small><b>点击即用</b> · 无需安装</small></span>
+          <i className="is-ready">READY</i>
         </button>
         <button
           type="button"
@@ -75,8 +76,8 @@ export function ProcessingModeControl({
           onClick={() => onModeChange("native")}
         >
           <Gauge size={18} />
-          <span><strong>本地加速模式</strong><small>需主动启动 localhost sidecar</small></span>
-          <i>{connectionState === "ready" ? "READY" : "OPTIONAL"}</i>
+          <span><strong>本地加速模式</strong><small><b>速度最快</b> · 本机硬件编码</small></span>
+          <i className={nativeReady ? "is-ready" : "is-not-ready"}>{nativeReady ? "READY" : "NOT READY"}</i>
         </button>
         <button
           type="button"
@@ -87,8 +88,8 @@ export function ProcessingModeControl({
           onClick={() => onModeChange("veo")}
         >
           <FlaskConical size={18} />
-          <span><strong>VEO 专属去水印</strong><small>实验 · 用户自行安装第三方 CLI</small></span>
-          <i>{connectionState === "ready" && veoCliStatus?.selection?.valid ? "VERIFIED" : "EXPERIMENT"}</i>
+          <span><strong>VEO 专属去水印</strong><small><b>效果最好</b> · 需下载第三方 CLI</small></span>
+          <i className={veoReady ? "is-ready" : "is-not-ready"}>{veoReady ? "READY" : "NOT READY"}</i>
         </button>
       </div>
 
@@ -131,11 +132,6 @@ export function ProcessingModeControl({
             <span>{nativeSummary(health)}</span>
             {connectionMessage}
           </p>
-          <p className="mode-control__hint">
-            先在本项目终端运行 <code>pnpm sidecar</code>，点击一键配对并在系统弹窗确认；认证令牌不会出现在页面、URL 或终端。{mode === "native"
-              ? "网页不会直接调用 NVENC 或 VideoToolbox，视频仅通过 127.0.0.1 传给本机进程。"
-              : "网页不会获得可执行文件真实路径或直接执行程序；本机选择器和执行都由安全会话保护的 127.0.0.1 服务完成。"}
-          </p>
         </div>
       )}
 
@@ -149,7 +145,6 @@ export function ProcessingModeControl({
           disabled={disabled}
           onForceAllFramesChange={onVeoForceAllFramesChange}
           onSelect={onSelectVeoCli}
-          onUseDelogo={onUseDelogo}
         />
       )}
     </div>

@@ -5,6 +5,39 @@ import { ProcessPanel } from "../src/components/ProcessPanel";
 afterEach(cleanup);
 
 describe("ProcessPanel", () => {
+  it("keeps the process number above its title, progress bar and mode controls", () => {
+    render(
+      <ProcessPanel
+        state={{ phase: "idle", progress: 0, message: "1 个视频等待处理" }}
+        total={1}
+        completed={0}
+        remaining={1}
+        downloadingAll={false}
+        mode="browser"
+        sidecarUrl="http://127.0.0.1:3210"
+        sidecarPairingCode=""
+        sidecarState="idle"
+        sidecarMessage="等待连接"
+        sidecarHealth={null}
+        onProcess={vi.fn()}
+        onCancel={vi.fn()}
+        onClearQueue={vi.fn()}
+        onDownloadAll={vi.fn()}
+        onModeChange={vi.fn()}
+        onSidecarUrlChange={vi.fn()}
+        onConnectSidecar={vi.fn()}
+      />,
+    );
+
+    const stepLabel = screen.getByText("PROCESS / 02");
+    const heading = screen.getByRole("heading", { name: "一键去水印" });
+    const progress = screen.getByRole("progressbar", { name: "批量处理进度" });
+    const modes = screen.getByRole("radiogroup", { name: "选择视频处理模式" });
+    expect(stepLabel.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(heading.compareDocumentPosition(progress) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(heading.compareDocumentPosition(modes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("marks VEO algorithm progress as an estimate while keeping a determinate progressbar", () => {
     render(
       <ProcessPanel
