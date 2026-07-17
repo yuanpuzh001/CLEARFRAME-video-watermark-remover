@@ -1,11 +1,81 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProcessingModeControl } from "../src/components/ProcessingModeControl";
 
 afterEach(cleanup);
 
 describe("ProcessingModeControl", () => {
-  it("explains that native acceleration requires an explicitly started loopback sidecar", () => {
+  it("summarizes each mode advantage without adding extra card content", () => {
+    render(
+      <ProcessingModeControl
+        mode="browser"
+        sidecarUrl="http://127.0.0.1:3210"
+        pairingCode=""
+        connectionState="idle"
+        connectionMessage="等待连接"
+        health={null}
+        disabled={false}
+        onModeChange={vi.fn()}
+        onSidecarUrlChange={vi.fn()}
+        onConnect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("radio", { name: /浏览器模式 点击即用 · 无需安装/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /本地加速模式 速度最快 · 本机硬件编码/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /VEO 专属去水印 效果最好 · 需下载第三方 CLI/ })).toBeInTheDocument();
+  });
+
+  it("uses only READY and NOT READY for all three mode states", () => {
+    const baseProps = {
+      mode: "browser" as const,
+      sidecarUrl: "http://127.0.0.1:3210",
+      pairingCode: "",
+      connectionMessage: "等待连接",
+      health: null,
+      disabled: false,
+      onModeChange: vi.fn(),
+      onSidecarUrlChange: vi.fn(),
+      onConnect: vi.fn(),
+    };
+    const { rerender } = render(
+      <ProcessingModeControl {...baseProps} connectionState="idle" />,
+    );
+    const browserCard = screen.getByRole("radio", { name: /浏览器模式/ });
+    const nativeCard = screen.getByRole("radio", { name: /本地加速模式/ });
+    const veoCard = screen.getByRole("radio", { name: /VEO 专属去水印/ });
+
+    expect(within(browserCard).getByText("READY")).toBeInTheDocument();
+    expect(within(nativeCard).getByText("NOT READY")).toBeInTheDocument();
+    expect(within(veoCard).getByText("NOT READY")).toBeInTheDocument();
+
+    rerender(<ProcessingModeControl {...baseProps} connectionState="ready" />);
+    expect(within(nativeCard).getByText("READY")).toBeInTheDocument();
+    expect(within(veoCard).getByText("NOT READY")).toBeInTheDocument();
+
+    rerender(
+      <ProcessingModeControl
+        {...baseProps}
+        connectionState="ready"
+        veoCliStatus={{
+          releaseVersion: "v0.6.4-demo",
+          releaseUrl: "release",
+          selection: {
+            fileName: "GeminiWatermarkTool-Video",
+            sizeBytes: 128,
+            sha256: "trusted-sha",
+            platform: "darwin",
+            version: "v0.6.4-demo",
+            valid: true,
+          },
+        }}
+      />,
+    );
+    expect(within(veoCard).getByText("READY")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/FALLBACK|OPTIONAL|EXPERIMENT|VERIFIED/);
+  });
+
+  it("offers one-click sidecar pairing without the obsolete terminal instructions", () => {
     const onConnect = vi.fn();
     render(
       <ProcessingModeControl
@@ -22,8 +92,8 @@ describe("ProcessingModeControl", () => {
       />,
     );
 
-    expect(screen.getByText(/pnpm sidecar/)).toBeInTheDocument();
-    expect(screen.getByText(/网页不会直接调用 NVENC 或 VideoToolbox/)).toBeInTheDocument();
+    expect(screen.queryByText(/pnpm sidecar/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/网页不会直接调用 NVENC 或 VideoToolbox/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("随机配对令牌")).not.toBeInTheDocument();
     expect(screen.getByText("无需复制令牌")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /一键配对/ }));
@@ -49,12 +119,11 @@ describe("ProcessingModeControl", () => {
     expect(screen.getByText("482 731")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "等待确认" })).toBeDisabled();
     expect(document.querySelector('input[type="password"]')).toBeNull();
-    expect(screen.getByText(/认证令牌不会出现在页面、URL 或终端/)).toBeInTheDocument();
+    expect(screen.queryByText(/认证令牌不会出现在页面、URL 或终端/)).not.toBeInTheDocument();
   });
 
   it("shows VEO offline, invalid and verified CLI states without pretending the browser can execute it", () => {
     const onSelect = vi.fn();
-    const onUseDelogo = vi.fn();
     const onForceAllFramesChange = vi.fn();
     const props = {
       mode: "veo" as const,
@@ -67,7 +136,6 @@ describe("ProcessingModeControl", () => {
       onSidecarUrlChange: vi.fn(),
       onConnect: vi.fn(),
       onSelectVeoCli: onSelect,
-      onUseDelogo,
       veoForceAllFrames: true,
       onVeoForceAllFramesChange: onForceAllFramesChange,
     };
@@ -76,8 +144,8 @@ describe("ProcessingModeControl", () => {
     );
 
     expect(screen.getByRole("button", { name: /需要启动本地服务/ })).toBeDisabled();
-    expect(screen.getByText(/第三方 CLI · M4 实测约 1 fps/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /下载 v0.6.4-demo/ })).toHaveAttribute(
+    expect(screen.getByText(/第三方实验 · M4 ≈ 1 fps/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /下载 VEO CLI v0.6.4-demo/ })).toHaveAttribute(
       "href",
       "https://github.com/allenk/VeoWatermarkRemover/releases/tag/v0.6.4-demo",
     );
@@ -101,8 +169,7 @@ describe("ProcessingModeControl", () => {
       />,
     );
     expect(screen.getByText("SHA-256 不匹配")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /改用 delogo/ }));
-    expect(onUseDelogo).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: /改用 delogo/ })).not.toBeInTheDocument();
 
     rerender(
       <ProcessingModeControl

@@ -30,7 +30,6 @@ interface ProcessPanelProps {
   veoForceAllFrames?: boolean;
   onVeoForceAllFramesChange?: (value: boolean) => void;
   onSelectVeoCli?: () => void;
-  onUseDelogo?: () => void;
 }
 
 export function ProcessPanel({
@@ -58,7 +57,6 @@ export function ProcessPanel({
   veoForceAllFrames = false,
   onVeoForceAllFramesChange = () => undefined,
   onSelectVeoCli = () => undefined,
-  onUseDelogo = () => undefined,
 }: ProcessPanelProps) {
   const busy = state.phase === "loading-engine" || state.phase === "processing";
   const buttonLabel = total === 1
@@ -76,9 +74,16 @@ export function ProcessPanel({
 
   return (
     <section id={WORKFLOW_SECTIONS.process.id} className="process-panel" aria-labelledby="process-heading">
+      <div className="process-panel__head">
+        <p className="eyebrow">{WORKFLOW_LABELS.process}</p>
+        <div className="process-panel__copy">
+          <h2 id="process-heading">{total > 1 ? "批量去水印" : "一键去水印"}</h2>
+          <p>视频会逐个处理以控制内存占用；每项使用各自的选区，全程不上传服务器。</p>
+        </div>
+      </div>
+
       <div className="process-panel__status" aria-live="polite">
         <div className="process-panel__status-line">
-          <p className="eyebrow">{WORKFLOW_LABELS.process}</p>
           <div>
             <strong>{state.message}</strong>
             <span className="process-panel__progress-value">
@@ -118,13 +123,7 @@ export function ProcessPanel({
         veoForceAllFrames={veoForceAllFrames}
         onVeoForceAllFramesChange={onVeoForceAllFramesChange}
         onSelectVeoCli={onSelectVeoCli}
-        onUseDelogo={onUseDelogo}
       />
-
-      <div className="process-panel__copy">
-        <h2 id="process-heading">{total > 1 ? "批量去水印" : "一键去水印"}</h2>
-        <p>视频会逐个处理以控制内存占用；每项使用各自的选区，全程不上传服务器。</p>
-      </div>
 
       <div className="process-panel__actions">
         <button

@@ -8,6 +8,7 @@ import { ResultPanel } from "../components/ResultPanel";
 import { WorkflowNavigation } from "../components/WorkflowNavigation";
 import type { SidecarConnectionState } from "../components/ProcessingModeControl";
 import { useBatchVideoProcessor, type ProcessingMode } from "../hooks/useBatchVideoProcessor";
+import { useRefreshGuard } from "../hooks/useRefreshGuard";
 import { checkSidecar, getVeoCliStatus, pairSidecar, selectVeoCli, type SidecarHealth, type VeoCliStatus } from "../lib/sidecar/client";
 import { WORKFLOW_SECTIONS } from "../lib/ui/workflowLabels";
 import { DEFAULT_REGION } from "../lib/video/region";
@@ -40,6 +41,7 @@ export function App() {
     sidecar: sidecarConnection,
     veoForceAllFrames,
   });
+  useRefreshGuard(items.length > 0);
   const activeItem = items.find((item) => item.id === activeId) ?? items[0] ?? null;
   const activeState = activeItem ? processor.states[activeItem.id] : undefined;
   const completed = items.filter((item) => processor.states[item.id]?.phase === "success").length;
@@ -224,11 +226,6 @@ export function App() {
     }
   };
 
-  const handleUseDelogo = () => {
-    if (!window.confirm("确认离开 VEO 实验模式并改用 CLEARFRAME delogo？当前视频不会自动开始处理。")) return;
-    setProcessingMode(sidecarState === "ready" ? "native" : "browser");
-  };
-
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -298,7 +295,6 @@ export function App() {
               veoForceAllFrames={veoForceAllFrames}
               onVeoForceAllFramesChange={setVeoForceAllFrames}
               onSelectVeoCli={() => void handleSelectVeoCli()}
-              onUseDelogo={handleUseDelogo}
             />
             <VideoPreview
               asset={activeItem.asset}
