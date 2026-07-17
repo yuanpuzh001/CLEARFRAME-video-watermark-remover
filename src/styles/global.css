@@ -225,19 +225,24 @@ main { padding: 76px 0 58px; }
 .mode-control__state--error { color: #ff9b8f; }
 .mode-control__hint { margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
 .mode-control__hint code { padding: 2px 5px; color: var(--acid); border: 1px solid rgba(185,255,90,.2); background: rgba(0,0,0,.25); }
-.veo-mode { display: grid; gap: 10px; padding: 16px; border: 1px solid rgba(255,183,77,.26); background: linear-gradient(130deg, rgba(255,183,77,.055), rgba(6,8,7,.7) 58%); }
+.veo-mode { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid rgba(255,183,77,.26); background: linear-gradient(130deg, rgba(255,183,77,.045), rgba(6,8,7,.64) 58%); }
 .veo-mode__masthead { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding-bottom: 11px; border-bottom: 1px solid rgba(255,183,77,.18); }
 .veo-mode__masthead > span, .veo-mode__masthead a { display: inline-flex; align-items: center; gap: 7px; font: 700 9px/1.2 "DIN Alternate", monospace; letter-spacing: .11em; }
 .veo-mode__masthead > span { color: #ffbd63; }
 .veo-mode__masthead a { color: var(--paper); text-decoration: none; }
 .veo-mode__masthead a:hover { color: #ffbd63; }
-.veo-mode__warnings { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.veo-mode__warnings p { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 11px 12px; color: #c4bbb0; border: 1px solid rgba(255,183,77,.13); background: rgba(0,0,0,.18); font-size: 10px; line-height: 1.65; }
-.veo-mode__warnings svg { flex: 0 0 auto; margin-top: 1px; color: #ff9d68; }
-.veo-mode__warnings strong { display: block; margin-bottom: 2px; color: #f2e8db; font-size: 9px; letter-spacing: .08em; }
-.veo-cli { padding: 13px; border-left: 2px solid #5d615d; background: rgba(0,0,0,.2); }
+.veo-mode__notice { display: flex; align-items: center; gap: 8px; margin: 0; color: #a9a39b; font-size: 9px; line-height: 1.45; }
+.veo-mode__notice svg { flex: 0 0 auto; color: #ff9d68; }
+.veo-mode__controls { display: grid; grid-template-columns: minmax(210px, .58fr) minmax(320px, 1.42fr); gap: 8px; }
+.veo-cli { min-width: 0; padding: 9px 10px; border-left: 2px solid #5d615d; background: rgba(0,0,0,.2); }
 .veo-cli.is-valid { border-left-color: var(--acid); }
 .veo-cli.is-invalid { border-left-color: #ff7568; }
+.veo-force { display: flex; align-items: center; gap: 10px; padding: 9px 11px; color: #c5cbc5; border: 1px solid var(--line); background: rgba(255,255,255,.015); cursor: pointer; }
+.veo-force.is-active { border-color: rgba(255,183,77,.42); background: rgba(255,183,77,.055); }
+.veo-force input { margin: 0; accent-color: #ffb74d; }
+.veo-force span { display: grid; gap: 3px; }
+.veo-force strong { font-size: 10px; }
+.veo-force small { color: var(--muted); font-size: 8px; line-height: 1.35; }
 .veo-cli__head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .veo-cli__head > div { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .veo-cli__head > div > svg { color: var(--muted); }
@@ -246,13 +251,16 @@ main { padding: 76px 0 58px; }
 .veo-cli__head span { display: grid; gap: 4px; }
 .veo-cli__head strong { font-size: 11px; }
 .veo-cli__head small { color: var(--muted); font-size: 9px; }
-.veo-cli__details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 12px 0 0; background: var(--line); }
+.veo-cli__disclosure { border-top: 1px solid rgba(255,183,77,.14); }
+.veo-cli__disclosure summary { padding: 7px 2px 0; color: var(--muted); font: 700 8px/1.2 "DIN Alternate", monospace; letter-spacing: .08em; cursor: pointer; }
+.veo-cli__disclosure summary:hover { color: #ffbd63; }
+.veo-cli__details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 8px 0 0; background: var(--line); }
 .veo-cli__details > div { min-width: 0; display: grid; gap: 5px; padding: 9px 10px; background: #0d110f; }
 .veo-cli__details .veo-cli__wide { grid-column: 1 / -1; }
 .veo-cli__details dt { color: var(--muted); font: 700 8px/1 "DIN Alternate", monospace; letter-spacing: .11em; text-transform: uppercase; }
 .veo-cli__details dd { overflow-wrap: anywhere; margin: 0; color: #d8ddd8; font: 500 9px/1.45 "DIN Alternate", monospace; }
-.veo-cli__error { margin: 10px 0 0; color: #ff9b8f; font-size: 10px; line-height: 1.5; }
-.veo-cli__fallback { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 0; color: #b8bdb8; border: 0; border-bottom: 1px solid #697069; background: none; font-size: 9px; cursor: pointer; }
+.veo-cli__error { margin: 7px 0 0; color: #ff9b8f; font-size: 9px; line-height: 1.4; }
+.veo-cli__fallback { display: inline-flex; align-items: center; gap: 6px; margin-top: 7px; padding: 0; color: #b8bdb8; border: 0; border-bottom: 1px solid #697069; background: none; font-size: 8px; cursor: pointer; }
 .veo-cli__fallback:hover:not(:disabled) { color: var(--paper); border-color: var(--paper); }
 .is-spinning { animation: spin .8s linear infinite; }
 .process-panel__actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
@@ -311,7 +319,7 @@ footer { min-height: 72px; display: flex; justify-content: space-between; align-
   .batch-queue__list { grid-template-columns: 1fr; }
   .process-panel { grid-template-columns: 1fr; gap: 22px; padding: 20px; }
   .process-panel__status-line { grid-template-columns: 1fr; gap: 8px; }
-  .mode-control__options, .mode-control__fields, .veo-mode__warnings { grid-template-columns: 1fr; }
+  .mode-control__options, .mode-control__fields, .veo-mode__controls { grid-template-columns: 1fr; }
   .veo-mode__masthead, .veo-cli__head { align-items: flex-start; flex-direction: column; }
   .veo-cli__head .button { width: 100%; }
   .mode-control__connect { width: 100%; }

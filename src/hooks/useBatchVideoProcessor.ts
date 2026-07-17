@@ -9,6 +9,7 @@ export type ProcessingMode = "browser" | "native" | "veo";
 interface BatchProcessorOptions {
   mode?: ProcessingMode;
   sidecar?: SidecarConnection;
+  veoForceAllFrames?: boolean;
 }
 
 const READY_STATE: BatchItemProcessingState = {
@@ -92,7 +93,9 @@ export function useBatchVideoProcessor(options: BatchProcessorOptions = {}) {
       : mode === "veo"
         ? (file: File, _region: VideoQueueItem["region"], onProgress: (progress: number, message: string) => void, signal: AbortSignal) => {
             if (!sidecar) throw new Error("尚未连接本地 sidecar");
-            return processVideoWithVeoSidecar(file, sidecar, onProgress, signal).then(({ blob, outputName, details }) => ({
+            return processVideoWithVeoSidecar(file, sidecar, onProgress, signal, {
+              forceAllFrames: options.veoForceAllFrames,
+            }).then(({ blob, outputName, details }) => ({
               blob,
               mode: "veo" as const,
               outputName,
@@ -167,7 +170,7 @@ export function useBatchVideoProcessor(options: BatchProcessorOptions = {}) {
     );
 
     if (controllerRef.current === controller) controllerRef.current = null;
-  }, [mode, replaceStates, sidecar, updateItem]);
+  }, [mode, options.veoForceAllFrames, replaceStates, sidecar, updateItem]);
 
   const cancel = useCallback(() => controllerRef.current?.abort(), []);
 

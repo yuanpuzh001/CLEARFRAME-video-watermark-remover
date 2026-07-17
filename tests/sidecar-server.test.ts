@@ -180,6 +180,55 @@ describe("sidecar HTTP security", () => {
     expect((await fetch(`${root}/v1/jobs/${createdJob.id}`, { headers })).status).toBe(404);
   });
 
+  it("expires terminal jobs so abandoned browser results do not remain indefinitely", async () => {
+    const app = await createSidecarServer({
+      config,
+      capabilities,
+      jobRetentionMs: 15,
+      jobRunner: async ({ inputPath, outputPath }) => {
+        await copyFile(inputPath, outputPath);
+        return {
+          plan: { encoder: "libx264", hardware: false },
+          encoderFallback: false,
+          bitrateAttempts: 1,
+          elapsedMs: 1,
+          realtimeFactor: 1,
+          verification: { valid: true },
+        } as unknown as NativeJobResult;
+      },
+    });
+    close = app.close;
+    await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+    const address = app.server.address() as AddressInfo;
+    const root = `http://127.0.0.1:${address.port}`;
+    const headers = {
+      Authorization: "Bearer test-sidecar-token",
+      Origin: "http://127.0.0.1:5173",
+    };
+    const created = await fetch(`${root}/v1/jobs`, {
+      method: "POST",
+      headers: {
+        ...headers,
+        "Content-Type": "video/mp4",
+        "X-Clearframe-Filename": "abandoned.mp4",
+        "X-Clearframe-Region": JSON.stringify({ x: 0.8, y: 0.8, width: 0.1, height: 0.1 }),
+      },
+      body: Buffer.from("video"),
+    });
+    const createdJob = await created.json() as { id: string };
+    let statusBody: { phase: string; expiresAt?: number } = { phase: "queued" };
+    for (let attempt = 0; attempt < 10 && statusBody.phase !== "success"; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      statusBody = await (await fetch(`${root}/v1/jobs/${createdJob.id}`, { headers })).json() as typeof statusBody;
+    }
+    expect(statusBody.phase).toBe("success");
+    expect(statusBody.expiresAt).toBeGreaterThan(Date.now());
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect((await fetch(`${root}/v1/jobs/${createdJob.id}`, { headers })).status).toBe(404);
+    expect(app.jobs.has(createdJob.id)).toBe(false);
+  });
+
   it("selects VEO only through the injected native picker and runs a validated snapshot", async () => {
     const selectedCli = {
       path: "/test/fake-veo",
@@ -235,7 +284,10 @@ describe("sidecar HTTP security", () => {
 
     const selectionResponse = await fetch(`${root}/v1/veo/cli/select`, { method: "POST", headers });
     expect(selectionResponse.status).toBe(200);
-    expect(((await selectionResponse.json()) as { selection: { sha256: string } }).selection.sha256).toBe("fake-trusted-sha");
+    const publicSelection = (await selectionResponse.json()) as { selection: { sha256: string; path?: string } };
+    expect(publicSelection.selection.sha256).toBe("fake-trusted-sha");
+    expect(publicSelection.selection).not.toHaveProperty("path");
+    expect(JSON.stringify(publicSelection)).not.toContain(selectedCli.path);
     expect(selected).toBe(1);
 
     const created = await fetch(`${root}/v1/veo/jobs`, {

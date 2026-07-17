@@ -37,6 +37,7 @@ export interface VeoJobResult {
   mediaIntegrity: VeoBitstreamIntegrity;
   mediaIntegrityPassed: boolean;
   bitrateWithinTolerance: boolean;
+  cliFramesPerSecond: number;
 }
 
 type MediaProber = typeof probeMedia;
@@ -76,8 +77,13 @@ function formatElapsed(elapsedMs: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function estimateVeoCliProgress(source: MediaAnalysis, elapsedMs: number): VeoJobProgress {
-  const estimatedDurationMs = sourceFrameCount(source) / VEO_REFERENCE_FPS * 1_000;
+export function estimateVeoCliProgress(
+  source: MediaAnalysis,
+  elapsedMs: number,
+  referenceFps = VEO_REFERENCE_FPS,
+): VeoJobProgress {
+  const safeReferenceFps = Number.isFinite(referenceFps) && referenceFps > 0 ? referenceFps : VEO_REFERENCE_FPS;
+  const estimatedDurationMs = sourceFrameCount(source) / safeReferenceFps * 1_000;
   const estimatedRatio = Math.min(1, Math.max(0, elapsedMs / estimatedDurationMs));
   const progress = Math.min(
     VEO_PROGRESS_CEILING,
@@ -87,6 +93,38 @@ export function estimateVeoCliProgress(source: MediaAnalysis, elapsedMs: number)
     progress,
     message: `VEO 算法处理中 · 预计 ${Math.round(progress * 100)}% · 已耗时 ${formatElapsed(elapsedMs)}`,
   };
+}
+
+export function parseVeoCliProgress(output: string): number | undefined {
+  const matches = [
+    ...output.matchAll(/(\d+)\s*\/\s*(\d+)\s*frames?/gi),
+    ...output.matchAll(/frames?\s*[:#]?\s*(\d+)\s*(?:\/|of)\s*(\d+)/gi),
+    ...output.matchAll(/\((\d+)\s*\/\s*(\d+)\)/g),
+  ].sort((left, right) => (left.index ?? 0) - (right.index ?? 0));
+  const latest = matches.at(-1);
+  if (latest) {
+    const completed = Number(latest[1]);
+    const total = Number(latest[2]);
+    if (Number.isFinite(completed) && Number.isFinite(total) && total > 0) {
+      return Math.min(1, Math.max(0, completed / total));
+    }
+  }
+  const percentages = [...output.matchAll(/(?:progress|processing|video)[^\r\n%]{0,60}?(\d+(?:\.\d+)?)%/gi)];
+  const percentage = Number(percentages.at(-1)?.[1]);
+  return Number.isFinite(percentage) ? Math.min(1, Math.max(0, percentage / 100)) : undefined;
+}
+
+export function buildVeoCliArgs(options: {
+  inputPath: string;
+  outputPath: string;
+  forceAllFrames?: boolean;
+}): string[] {
+  return [
+    "--veo", "--no-banner",
+    ...(options.forceAllFrames ? ["--force"] : []),
+    "-i", options.inputPath,
+    "-o", options.outputPath,
+  ];
 }
 
 function streamSummaryMatches(source: MediaAnalysis, processed: MediaAnalysis): string[] {
@@ -271,6 +309,8 @@ export async function runVeoJob(options: {
   prober?: MediaProber;
   verifier?: MediaVerifier;
   integrityVerifier?: IntegrityVerifier;
+  estimatedFps?: number;
+  forceAllFrames?: boolean;
   onProgress?: (progress: VeoJobProgress) => void;
 }): Promise<VeoJobResult> {
   if (!options.cli.valid || !options.cli.version) throw new Error("VEO CLI 尚未通过严格校验，禁止执行");
@@ -287,20 +327,42 @@ export async function runVeoJob(options: {
 
   notify({ progress: VEO_PROGRESS_START, message: "VEO 算法处理中 · 正在建立预计进度…" });
   const cliStartedAt = performance.now();
+  let outputTail = "";
+  let latestRealRatio = 0;
+  const handleCliOutput = (chunk: string) => {
+    outputTail = `${outputTail}${chunk}`.slice(-8_192);
+    const ratio = parseVeoCliProgress(outputTail);
+    if (ratio === undefined || ratio <= latestRealRatio) return;
+    latestRealRatio = ratio;
+    const progress = VEO_PROGRESS_START + ratio * (VEO_PROGRESS_CEILING - VEO_PROGRESS_START);
+    notify({
+      progress,
+      message: `VEO 算法处理中 · CLI 帧进度 ${Math.round(ratio * 100)}% · 已耗时 ${formatElapsed(performance.now() - cliStartedAt)}`,
+    });
+  };
   const progressTimer = setInterval(() => {
-    notify(estimateVeoCliProgress(source, performance.now() - cliStartedAt));
+    if (latestRealRatio === 0) {
+      notify(estimateVeoCliProgress(source, performance.now() - cliStartedAt, options.estimatedFps));
+    }
   }, VEO_PROGRESS_INTERVAL_MS);
   progressTimer.unref?.();
   let cliRun;
   try {
-    cliRun = await runner(options.cli.path, ["-i", options.inputPath, "-o", options.intermediatePath], {
+    cliRun = await runner(options.cli.path, buildVeoCliArgs({
+      inputPath: options.inputPath,
+      outputPath: options.intermediatePath,
+      forceAllFrames: options.forceAllFrames,
+    }), {
       signal: options.signal,
       timeoutMs: 1_800_000,
+      onStdout: handleCliOutput,
+      onStderr: handleCliOutput,
     });
   } finally {
     clearInterval(progressTimer);
   }
   const cliElapsedMs = performance.now() - cliStartedAt;
+  const cliFramesPerSecond = sourceFrameCount(source) / Math.max(cliElapsedMs / 1_000, 0.001);
   if (cliRun.code !== 0) {
     throw new Error(`VEO CLI 处理失败：${cliRun.stderr.trim() || `退出码 ${cliRun.code}`}`);
   }
@@ -358,5 +420,6 @@ export async function runVeoJob(options: {
     mediaIntegrity,
     mediaIntegrityPassed: mediaIntegrity.passed,
     bitrateWithinTolerance: verification.bitrateWithinTolerance,
+    cliFramesPerSecond,
   };
 }

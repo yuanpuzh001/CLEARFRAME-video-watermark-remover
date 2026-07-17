@@ -55,6 +55,7 @@ describe("ProcessingModeControl", () => {
   it("shows VEO offline, invalid and verified CLI states without pretending the browser can execute it", () => {
     const onSelect = vi.fn();
     const onUseDelogo = vi.fn();
+    const onForceAllFramesChange = vi.fn();
     const props = {
       mode: "veo" as const,
       sidecarUrl: "http://127.0.0.1:3210",
@@ -67,15 +68,16 @@ describe("ProcessingModeControl", () => {
       onConnect: vi.fn(),
       onSelectVeoCli: onSelect,
       onUseDelogo,
+      veoForceAllFrames: true,
+      onVeoForceAllFramesChange: onForceAllFramesChange,
     };
     const { rerender } = render(
       <ProcessingModeControl {...props} connectionState="idle" />,
     );
 
     expect(screen.getByRole("button", { name: /需要启动本地服务/ })).toBeDisabled();
-    expect(screen.getByText(/CLI 不随 CLEARFRAME 分发/)).toBeInTheDocument();
-    expect(screen.getByText(/M4 约 1 fps/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /官方 v0.6.4-demo 发布页/ })).toHaveAttribute(
+    expect(screen.getByText(/第三方 CLI · M4 实测约 1 fps/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /下载 v0.6.4-demo/ })).toHaveAttribute(
       "href",
       "https://github.com/allenk/VeoWatermarkRemover/releases/tag/v0.6.4-demo",
     );
@@ -88,7 +90,6 @@ describe("ProcessingModeControl", () => {
           releaseVersion: "v0.6.4-demo",
           releaseUrl: "release",
           selection: {
-            path: "/Users/test/untrusted-cli",
             fileName: "untrusted-cli",
             sizeBytes: 128,
             sha256: "bad-sha",
@@ -100,7 +101,7 @@ describe("ProcessingModeControl", () => {
       />,
     );
     expect(screen.getByText("SHA-256 不匹配")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /确认改用 delogo 模式/ }));
+    fireEvent.click(screen.getByRole("button", { name: /改用 delogo/ }));
     expect(onUseDelogo).toHaveBeenCalledOnce();
 
     rerender(
@@ -111,7 +112,6 @@ describe("ProcessingModeControl", () => {
           releaseVersion: "v0.6.4-demo",
           releaseUrl: "release",
           selection: {
-            path: "/Users/test/GeminiWatermarkTool-Video",
             fileName: "GeminiWatermarkTool-Video",
             sizeBytes: 128,
             sha256: "trusted-sha",
@@ -122,7 +122,13 @@ describe("ProcessingModeControl", () => {
         }}
       />,
     );
-    expect(screen.getByText("严格哈希校验通过")).toBeInTheDocument();
+    expect(screen.getByText("哈希校验通过")).toBeInTheDocument();
+    const forceToggle = screen.getByRole("checkbox", { name: /遮挡帧处理/ });
+    expect(forceToggle).toBeChecked();
+    fireEvent.click(forceToggle);
+    expect(onForceAllFramesChange).toHaveBeenCalledWith(false);
+    expect(screen.getByText("仅 sidecar 可见，不发送给网页")).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("/Users/test/");
     expect(screen.getByText("trusted-sha")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /选择本地 CLI/ }));
     expect(onSelect).toHaveBeenCalledOnce();

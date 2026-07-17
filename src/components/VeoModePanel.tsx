@@ -10,7 +10,9 @@ interface VeoModePanelProps {
   status: VeoCliStatus | null;
   selecting: boolean;
   selectionError: string;
+  forceAllFrames: boolean;
   disabled: boolean;
+  onForceAllFramesChange: (value: boolean) => void;
   onSelect: () => void;
   onUseDelogo: () => void;
 }
@@ -20,7 +22,9 @@ export function VeoModePanel({
   status,
   selecting,
   selectionError,
+  forceAllFrames,
   disabled,
+  onForceAllFramesChange,
   onSelect,
   onUseDelogo,
 }: VeoModePanelProps) {
@@ -35,51 +39,69 @@ export function VeoModePanel({
   return (
     <div className="veo-mode" aria-label="VEO 实验模式设置">
       <div className="veo-mode__masthead">
-        <span><FlaskConical size={15} /> EXPERIMENTAL / USER-SUPPLIED CLI</span>
+        <span><FlaskConical size={15} /> VEO CLI / EXPERIMENTAL</span>
         <a href={RELEASE_URL} target="_blank" rel="noreferrer">
-          官方 v0.6.4-demo 发布页 <ExternalLink size={13} />
+          下载 v0.6.4-demo <ExternalLink size={13} />
         </a>
       </div>
 
-      <div className="veo-mode__warnings">
-        <p><ShieldAlert size={15} /><span><strong>第三方边界</strong>CLI 不随 CLEARFRAME 分发。上游页面声明公开/MIT，但当前仓库未展示可审计实现源码或独立 LICENSE 文件；请按第三方闭源二进制谨慎处理，并且只处理你有权处理的视频。</span></p>
-        <p><ShieldAlert size={15} /><span><strong>实测质量</strong>M4 约 1 fps；视频码率可能明显下降，局部可能出现模糊或色斑。CLEARFRAME 不会二次编码或填充文件来伪装码率恢复。</span></p>
+      <p className="veo-mode__notice">
+        <ShieldAlert size={14} />
+        第三方 CLI · M4 实测约 1 fps · 可能降码率或产生局部模糊 · 仅处理已获授权的视频
+      </p>
+
+      <div className="veo-mode__controls">
+        <label className={`veo-force ${forceAllFrames ? "is-active" : ""}`}>
+          <input
+            type="checkbox"
+            checked={forceAllFrames}
+            disabled={disabled}
+            onChange={(event) => onForceAllFramesChange(event.target.checked)}
+          />
+          <span>
+            <strong>遮挡帧处理</strong>
+            <small>减少跳帧，可能影响前景</small>
+          </span>
+        </label>
+
+        <div className={`veo-cli ${selection?.valid ? "is-valid" : selection ? "is-invalid" : ""}`}>
+          <div className="veo-cli__head">
+            <div>
+              <FileCheck2 size={17} />
+              <span><strong>本机 CLI</strong><small>{selection?.valid ? "哈希校验通过" : selection ? "校验失败" : "尚未选择"}</small></span>
+            </div>
+            <button
+              className="button button--ghost"
+              type="button"
+              disabled={disabled || offline || selecting}
+              onClick={onSelect}
+            >
+              <FolderOpen size={15} /> {buttonLabel}
+            </button>
+          </div>
+          {(selection?.error || selectionError) && (
+            <p className="veo-cli__error" role="alert">{selection?.error || selectionError}</p>
+          )}
+          {(offline || (selection && !selection.valid)) && (
+            <button className="veo-cli__fallback" type="button" disabled={disabled} onClick={onUseDelogo}>
+              <Undo2 size={13} /> 改用 delogo
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className={`veo-cli ${selection?.valid ? "is-valid" : selection ? "is-invalid" : ""}`}>
-        <div className="veo-cli__head">
-          <div>
-            <FileCheck2 size={17} />
-            <span><strong>本机 CLI 状态</strong><small>{selection?.valid ? "严格哈希校验通过" : selection ? "校验未通过，禁止执行" : "尚未选择"}</small></span>
-          </div>
-          <button
-            className="button button--ghost"
-            type="button"
-            disabled={disabled || offline || selecting}
-            onClick={onSelect}
-          >
-            <FolderOpen size={15} /> {buttonLabel}
-          </button>
-        </div>
-
-        {selection && (
+      {selection && (
+        <details className="veo-cli__disclosure">
+          <summary>查看 CLI 校验信息</summary>
           <dl className="veo-cli__details">
             <div><dt>文件</dt><dd>{selection.fileName}</dd></div>
             <div><dt>大小</dt><dd>{formatBytes(selection.sizeBytes)}</dd></div>
             <div><dt>版本</dt><dd>{selection.version ?? "未识别"}</dd></div>
-            <div className="veo-cli__wide"><dt>路径</dt><dd>{selection.path}</dd></div>
+            <div className="veo-cli__wide"><dt>本机位置</dt><dd>仅 sidecar 可见，不发送给网页</dd></div>
             <div className="veo-cli__wide"><dt>SHA-256</dt><dd>{selection.sha256 || "未计算"}</dd></div>
           </dl>
-        )}
-        {(selection?.error || selectionError) && (
-          <p className="veo-cli__error" role="alert">{selection?.error || selectionError}</p>
-        )}
-        {(offline || (selection && !selection.valid)) && (
-          <button className="veo-cli__fallback" type="button" disabled={disabled} onClick={onUseDelogo}>
-            <Undo2 size={13} /> 确认改用 delogo 模式
-          </button>
-        )}
-      </div>
+        </details>
+      )}
     </div>
   );
 }

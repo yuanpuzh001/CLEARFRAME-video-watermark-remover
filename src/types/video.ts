@@ -41,6 +41,7 @@ export interface VeoProcessingDetails {
   cliVersion: string;
   cliSha256: string;
   cliElapsedMs: number;
+  cliFramesPerSecond?: number;
   mediaIntegrityPassed: boolean;
   bitrateWithinTolerance: boolean;
   bitrateDelta: number;

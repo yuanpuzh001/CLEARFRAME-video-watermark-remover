@@ -30,11 +30,16 @@ export function App() {
   const [veoCliStatus, setVeoCliStatus] = useState<VeoCliStatus | null>(null);
   const [veoSelecting, setVeoSelecting] = useState(false);
   const [veoSelectionError, setVeoSelectionError] = useState("");
+  const [veoForceAllFrames, setVeoForceAllFrames] = useState(true);
   const itemsRef = useRef<VideoQueueItem[]>([]);
   const sidecarConnection = sidecarState === "ready"
     ? { baseUrl: sidecarUrl }
     : undefined;
-  const processor = useBatchVideoProcessor({ mode: processingMode, sidecar: sidecarConnection });
+  const processor = useBatchVideoProcessor({
+    mode: processingMode,
+    sidecar: sidecarConnection,
+    veoForceAllFrames,
+  });
   const activeItem = items.find((item) => item.id === activeId) ?? items[0] ?? null;
   const activeState = activeItem ? processor.states[activeItem.id] : undefined;
   const completed = items.filter((item) => processor.states[item.id]?.phase === "success").length;
@@ -290,6 +295,8 @@ export function App() {
               veoCliStatus={veoCliStatus}
               veoSelecting={veoSelecting}
               veoSelectionError={veoSelectionError}
+              veoForceAllFrames={veoForceAllFrames}
+              onVeoForceAllFramesChange={setVeoForceAllFrames}
               onSelectVeoCli={() => void handleSelectVeoCli()}
               onUseDelogo={handleUseDelogo}
             />

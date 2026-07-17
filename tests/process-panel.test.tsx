@@ -33,6 +33,34 @@ describe("ProcessPanel", () => {
     expect(screen.getByRole("progressbar", { name: "批量处理进度" })).toHaveAttribute("aria-valuetext", expect.stringContaining("预计 43%"));
   });
 
+  it("does not label external CLI frame progress as an estimate", () => {
+    render(
+      <ProcessPanel
+        state={{ phase: "processing", progress: 0.43, message: "VEO 算法处理中 · CLI 帧进度 51% · 已耗时 00:05" }}
+        total={1}
+        completed={0}
+        remaining={1}
+        downloadingAll={false}
+        mode="veo"
+        sidecarUrl="http://127.0.0.1:3210"
+        sidecarPairingCode=""
+        sidecarState="ready"
+        sidecarMessage="已连接"
+        sidecarHealth={null}
+        onProcess={vi.fn()}
+        onCancel={vi.fn()}
+        onClearQueue={vi.fn()}
+        onDownloadAll={vi.fn()}
+        onModeChange={vi.fn()}
+        onSidecarUrlChange={vi.fn()}
+        onConnectSidecar={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("预计", { selector: "small" })).not.toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "批量处理进度" })).toHaveAttribute("aria-valuetext", expect.stringContaining("CLI 帧进度"));
+  });
+
   it("offers one archive download after a batch completes", () => {
     const onDownloadAll = vi.fn();
     const onClearQueue = vi.fn();
@@ -139,7 +167,7 @@ describe("ProcessPanel", () => {
         veoCliStatus={{
           releaseVersion: "v0.6.4-demo",
           releaseUrl: "release",
-          selection: { path: "/fake", fileName: "fake", sizeBytes: 1, sha256: "sha", platform: "darwin", version: "v0.6.4-demo", valid: true },
+          selection: { fileName: "fake", sizeBytes: 1, sha256: "sha", platform: "darwin", version: "v0.6.4-demo", valid: true },
         }}
         onProcess={vi.fn()}
         onCancel={vi.fn()}

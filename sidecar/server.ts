@@ -31,9 +31,13 @@ interface SidecarJob {
   outputPath: string;
   directory: string;
   region?: NormalizedRegion;
+  veoForceAllFrames?: boolean;
   veoCli?: VeoCliSelection;
   controller: AbortController;
   deleteRequested: boolean;
+  expiresAt?: number;
+  cleanupTimer?: NodeJS.Timeout;
+  cleanupPromise?: Promise<void>;
 }
 
 type NativeJobRunner = typeof runNativeDelogoJob;
@@ -102,6 +106,7 @@ function publicJob(job: SidecarJob): Record<string, unknown> {
     progress: job.progress,
     message: job.message,
     error: job.error,
+    expiresAt: job.expiresAt,
     result: result
       ? job.mode === "veo"
         ? {
@@ -110,6 +115,7 @@ function publicJob(job: SidecarJob): Record<string, unknown> {
             cliElapsedMs: (result as VeoJobResult).cliElapsedMs,
             finalizationElapsedMs: (result as VeoJobResult).finalizationElapsedMs,
             elapsedMs: (result as VeoJobResult).elapsedMs,
+            cliFramesPerSecond: (result as VeoJobResult).cliFramesPerSecond,
             mediaIntegrity: (result as VeoJobResult).mediaIntegrity,
             mediaIntegrityPassed: (result as VeoJobResult).mediaIntegrityPassed,
             bitrateWithinTolerance: (result as VeoJobResult).bitrateWithinTolerance,
@@ -131,7 +137,6 @@ function publicJob(job: SidecarJob): Record<string, unknown> {
 function publicVeoSelection(selection: VeoCliSelection | undefined): Record<string, unknown> | undefined {
   if (!selection) return undefined;
   return {
-    path: selection.path,
     fileName: selection.fileName,
     sizeBytes: selection.sizeBytes,
     sha256: selection.sha256,
@@ -155,6 +160,7 @@ export async function createSidecarServer(options: {
   veoJobRunner?: VeoJobRunner;
   veoCliSelector?: VeoCliSelector;
   pairingApprover?: PairingApprover;
+  jobRetentionMs?: number;
 }): Promise<{ server: Server; jobs: Map<string, SidecarJob>; close: () => Promise<void> }> {
   const { config, capabilities } = options;
   const jobRunner = options.jobRunner ?? runNativeDelogoJob;
@@ -163,16 +169,31 @@ export async function createSidecarServer(options: {
   const pairing = new PairingManager(options.pairingApprover ?? requestNativePairingApproval);
   const tempRoot = await mkdtemp(join(tmpdir(), "clearframe-sidecar-"));
   const jobs = new Map<string, SidecarJob>();
+  const jobRetentionMs = options.jobRetentionMs ?? 30 * 60 * 1000;
+  let veoEstimatedFps = capabilities.platform === "win32" && capabilities.gpuName ? 12 : 1;
   let veoSelection: VeoCliSelection | undefined;
 
   const cleanupJob = async (job: SidecarJob) => {
-    await removeFile(job.inputPath);
-    if (job.intermediatePath) await removeFile(job.intermediatePath);
-    await removeFile(job.outputPath);
-    await removeFile(`${job.outputPath}.attempt-1.mp4`);
-    await removeFile(`${job.outputPath}.attempt-2.mp4`);
-    try { await rmdir(job.directory); } catch { /* active process may still hold a file */ }
-    jobs.delete(job.id);
+    if (job.cleanupPromise) return job.cleanupPromise;
+    job.cleanupPromise = (async () => {
+      if (job.cleanupTimer) clearTimeout(job.cleanupTimer);
+      await removeFile(job.inputPath);
+      if (job.intermediatePath) await removeFile(job.intermediatePath);
+      await removeFile(job.outputPath);
+      await removeFile(`${job.outputPath}.attempt-1.mp4`);
+      await removeFile(`${job.outputPath}.attempt-2.mp4`);
+      try { await rmdir(job.directory); } catch { /* active process may still hold a file */ }
+      if (jobs.get(job.id) === job) jobs.delete(job.id);
+    })();
+    return job.cleanupPromise;
+  };
+
+  const scheduleCleanup = (job: SidecarJob) => {
+    if (!Number.isFinite(jobRetentionMs) || jobRetentionMs <= 0 || job.cleanupPromise) return;
+    if (job.cleanupTimer) clearTimeout(job.cleanupTimer);
+    job.expiresAt = Date.now() + jobRetentionMs;
+    job.cleanupTimer = setTimeout(() => { void cleanupJob(job); }, jobRetentionMs);
+    job.cleanupTimer.unref();
   };
 
   const runJob = async (job: SidecarJob) => {
@@ -185,15 +206,21 @@ export async function createSidecarServer(options: {
       };
       if (job.mode === "veo") {
         if (!job.veoCli?.valid || !job.intermediatePath) throw new Error("VEO CLI 未选择或未通过校验");
-        job.result = await veoJobRunner({
+        const result = await veoJobRunner({
           inputPath: job.inputPath,
           intermediatePath: job.intermediatePath,
           outputPath: job.outputPath,
           cli: job.veoCli,
           config,
           signal: job.controller.signal,
+          estimatedFps: veoEstimatedFps,
+          forceAllFrames: job.veoForceAllFrames,
           onProgress: updateProgress,
         });
+        job.result = result;
+        if (Number.isFinite(result.cliFramesPerSecond) && result.cliFramesPerSecond > 0) {
+          veoEstimatedFps = result.cliFramesPerSecond;
+        }
       } else {
         if (!job.region) throw new Error("缺少有效的水印区域");
         job.result = await jobRunner({
@@ -220,6 +247,7 @@ export async function createSidecarServer(options: {
       }
     } finally {
       if (job.deleteRequested) await cleanupJob(job);
+      else scheduleCleanup(job);
     }
   };
 
@@ -231,7 +259,7 @@ export async function createSidecarServer(options: {
     if (request.method === "OPTIONS") {
       response.statusCode = 204;
       response.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-      response.setHeader("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Clearframe-Filename,X-Clearframe-Region");
+      response.setHeader("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Clearframe-Filename,X-Clearframe-Region,X-Clearframe-Veo-Force");
       return response.end();
     }
     if (request.method === "POST" && url.pathname === "/v1/pairing/requests") {
@@ -311,12 +339,19 @@ export async function createSidecarServer(options: {
         return sendJson(response, 413, { error: "视频大小无效或超出 sidecar 限制" });
       }
       let region: NormalizedRegion | undefined;
+      let veoForceAllFrames: boolean | undefined;
       if (requestedMode === "native") {
         try {
           region = parseRegion(request.headers["x-clearframe-region"] as string | undefined);
         } catch (error) {
           return sendJson(response, 400, { error: error instanceof Error ? error.message : "水印区域无效" });
         }
+      } else {
+        const forceHeader = request.headers["x-clearframe-veo-force"];
+        if (forceHeader !== undefined && forceHeader !== "0" && forceHeader !== "1") {
+          return sendJson(response, 400, { error: "VEO 强制逐帧参数无效" });
+        }
+        veoForceAllFrames = forceHeader === "1";
       }
       const id = randomUUID();
       const fileName = safeName(request.headers["x-clearframe-filename"] as string | undefined ?? "video.mp4");
@@ -329,6 +364,7 @@ export async function createSidecarServer(options: {
       const job: SidecarJob = {
         id, mode: requestedMode, fileName, outputName, phase: "uploading", progress: 0,
         message: "正在接收本地视频…", inputPath, intermediatePath, outputPath, directory, region,
+        veoForceAllFrames,
         veoCli: requestedMode === "veo" ? veoSelection : undefined,
         controller: new AbortController(), deleteRequested: false,
       };
