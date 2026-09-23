@@ -2,6 +2,30 @@
 
 一个只在当前设备处理 MP4 的视频去水印工具。默认使用浏览器内的 ffmpeg.wasm；也可以由用户主动启动仅监听 `127.0.0.1` 的原生 sidecar，使用系统 FFmpeg 加速处理。另提供非默认的 VEO 第三方 CLI 实验适配模式。文件不会上传到远端服务器。
 
+## 推荐使用方式
+
+- 如果需要处理 **Google Veo / Omni 生成视频中的固定水印**，建议优先尝试“VEO 专属去水印”模式。该模式通常比通用 `delogo` 更适合这类水印，但仍可能出现漏帧、模糊、色斑或码率下降，处理完成后请逐段检查结果。
+- 如果更看重速度，或需要手动框选其他固定位置的水印，建议使用“本地加速模式”；它会调用本机 FFmpeg，并优先使用可用的 VideoToolbox 或 NVENC 硬件编码。
+- 如果不想安装本地依赖，可以直接使用“浏览器模式”，但处理速度通常更慢。
+
+本地加速模式和 VEO 专属模式都需要先启动本项目的 sidecar：
+
+```bash
+pnpm sidecar
+```
+
+然后回到网页点击“一键配对”，核对六位短码并在系统弹窗中允许连接。如果不了解终端、pnpm、FFmpeg 或 sidecar，可以把本 README、终端报错和当前系统信息交给可信的 AI 编程工具，让它协助完成依赖检查和启动；不要把私人视频、认证信息或来历不明的命令直接交给第三方服务。
+
+### VEO 模式快速上手
+
+1. 启动 sidecar，并在网页完成“一键配对”。
+2. 切换到“VEO 专属去水印”模式，点击页面中的 CLI 官方发布页入口，前往 [v0.6.4-demo 发布页](https://github.com/allenk/VeoWatermarkRemover/releases/tag/v0.6.4-demo)下载适合当前系统的文件。
+3. 解压下载文件。当前项目严格校验并实测的是 macOS Universal 版本中的 `GeminiWatermarkTool-Video` 可执行文件，而不是 ZIP 压缩包。
+4. 回到网页点击“选择本地 CLI”。在 sidecar 打开的系统文件选择器中，选择该可执行文件；也可以从 Finder 将它拖入文件选择器后确认。
+5. 等待页面显示哈希校验通过和 `READY`，再上传有权处理的视频并开始去水印。
+
+> 有不确定的步骤时，可以借助 AI 工具排查，但请同时提供完整报错、操作系统、Node/pnpm 与 FFmpeg 版本。AI 建议也需要核对后再执行，尤其不要运行会删除文件、关闭系统安全机制或来源不明的命令。
+
 ## 功能
 
 - 拖放或一次选择多个 MP4 文件，组成批量处理队列
@@ -77,15 +101,15 @@ pnpm sidecar -- --ffmpeg=/absolute/path/ffmpeg \
 
 ## 可选：VEO 专属去水印（实验）
 
-此模式只是一层安全适配，不包含第三方算法或二进制。CLEARFRAME 不会扫描磁盘、自动下载或打包 VeoWatermarkRemover；用户需要自行从[上游 v0.6.4-demo 发布页](https://github.com/allenk/VeoWatermarkRemover/releases/tag/v0.6.4-demo)了解风险并下载。
+此模式只是一层安全适配，不包含第三方算法或二进制。CLEARFRAME 不会扫描磁盘、自动下载或打包 VeoWatermarkRemover；页面提供官方发布页入口，用户仍需要自行从[上游 v0.6.4-demo 发布页](https://github.com/allenk/VeoWatermarkRemover/releases/tag/v0.6.4-demo)了解风险并下载。
 
 截至 2026-07-13，上游页面声明公开构建和 MIT，但仓库文件列表没有展示可审计的实现源码或独立 `LICENSE` 文件。CLEARFRAME 因此仍把它视为用户自行安装的第三方闭源二进制，不对其安全性、许可证或处理质量背书。
 
 使用步骤：
 
 1. 运行 `pnpm sidecar`，在页面点击“一键配对”，核对六位短码并在系统弹窗确认。
-2. 切换到“VEO 专属去水印”实验模式，点击“选择本地 CLI”。
-3. sidecar 弹出操作系统原生文件选择器；网页不会获得真实可执行路径，也不能用 `<input type=file>` 直接执行程序。
+2. 切换到“VEO 专属去水印”实验模式，通过页面内的官方发布页入口下载并解压 CLI。不要直接选择 ZIP 压缩包。
+3. 点击“选择本地 CLI”。sidecar 会弹出操作系统原生文件选择器；在 macOS 上选择或从 Finder 拖入解压后的 `GeminiWatermarkTool-Video` 可执行文件。网页不会获得真实可执行路径，也不能用 `<input type=file>` 直接执行程序。
 4. 只有普通文件、当前平台可执行格式、执行权限与已知解压后二进制 SHA-256 全部通过后，处理按钮才会启用。
 
 当前严格信任表仅包含已实测的 macOS Universal v0.6.4-demo 解压后二进制：
